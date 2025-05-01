@@ -176,7 +176,7 @@ class OpportunityModel {
       LEFT JOIN 
         opportunities o ON c.id = o.client_id AND s.id = o.service_id
       WHERE 
-        c.status = 'active' AND s.status = 'active'
+        s.status = 'active'
       ORDER BY 
         c.name, s.business_unit, s.name
     `;

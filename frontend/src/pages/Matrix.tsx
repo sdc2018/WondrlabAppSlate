@@ -37,7 +37,8 @@ import PendingIcon from '@mui/icons-material/Pending';
 import BusinessIcon from '@mui/icons-material/Business';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
-import { useNavigate } from 'react-router-dom';
+import RefreshIcon from '@mui/icons-material/Refresh';
+import { useNavigate, useLocation } from 'react-router-dom';
 
 // Services
 import opportunityService, { MatrixData, Opportunity, OpportunityInput } from '../services/opportunityService';
@@ -66,6 +67,7 @@ const priorityOptions = [
 
 const Matrix: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [matrixData, setMatrixData] = useState<MatrixData | null>(null);
   const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
   const [loading, setLoading] = useState(true);
@@ -117,7 +119,7 @@ const Matrix: React.FC = () => {
     };
 
     fetchMatrixData();
-  }, []);
+  }, [location]); // Add location to dependency array to refetch data when navigating back to the page
 
   const handleCellClick = (clientId: number, serviceId: number) => {
     // Check if there's an opportunity for this client-service combination
@@ -247,7 +249,9 @@ const Matrix: React.FC = () => {
       };
     }
     
-    if (cell.status === 'opportunity') {
+    // Check if it's an opportunity - either explicitly marked as 'opportunity' or has any valid opportunity status
+    if (cell.status === 'opportunity' || 
+        (cell.status && ['new', 'in_progress', 'qualified', 'proposal', 'negotiation', 'won', 'lost', 'on_hold'].includes(cell.status))) {
       return {
         backgroundColor: '#fff8e1', // Light amber
         cursor: 'pointer',
@@ -285,10 +289,13 @@ const Matrix: React.FC = () => {
       );
     }
     
-    if (cell.status === 'opportunity') {
+    // Check if it's an opportunity - either explicitly marked as 'opportunity' or has any valid opportunity status
+    if (cell.status === 'opportunity' || 
+        (cell.status && ['new', 'in_progress', 'qualified', 'proposal', 'negotiation', 'won', 'lost', 'on_hold'].includes(cell.status))) {
       const opportunity = opportunities.find(o => o.id === cell.opportunity_id);
+      console.log(`Found opportunity cell: clientId=${clientId}, serviceId=${serviceId}, status=${cell.status}, opportunity_id=${cell.opportunity_id}`);
       return (
-        <Tooltip title={`Opportunity: ${opportunity?.name || 'Unknown'}`}>
+        <Tooltip title={`Opportunity: ${opportunity?.name || 'Unknown'} (${cell.status})`}>
           <PendingIcon color="warning" fontSize="small" />
         </Tooltip>
       );
@@ -354,7 +361,37 @@ const Matrix: React.FC = () => {
 
   return (
     <Box>
-      <Typography variant="h4" sx={{ mb: 3 }}>Cross-Sell Opportunity Matrix</Typography>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+        <Typography variant="h4">Cross-Sell Opportunity Matrix</Typography>
+        <Button 
+          variant="outlined" 
+          startIcon={<RefreshIcon />}
+          onClick={() => {
+            setLoading(true);
+            const fetchMatrixData = async () => {
+              try {
+                // Get matrix data from the API
+                const data = await opportunityService.getMatrixData();
+                setMatrixData(data);
+                
+                // Get all opportunities for additional details
+                const allOpportunities = await opportunityService.getAllOpportunities();
+                setOpportunities(allOpportunities);
+                
+                setError(null);
+              } catch (err) {
+                console.error('Error refreshing matrix data:', err);
+                setError('Failed to refresh matrix data. Please try again.');
+              } finally {
+                setLoading(false);
+              }
+            };
+            fetchMatrixData();
+          }}
+        >
+          Refresh
+        </Button>
+      </Box>
       
       {error && (
         <Alert severity="error" sx={{ mb: 2 }}>
