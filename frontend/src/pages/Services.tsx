@@ -30,15 +30,7 @@ import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import serviceService, { Service, ServiceInput } from '../services/serviceService';
-
-// Business units for dropdown
-const businessUnits = [
-  'Creative',
-  'Digital Marketing',
-  'Content Production',
-  'Media Planning',
-  'Strategy'
-];
+import businessUnitService, { BusinessUnit } from '../services/businessUnitService';
 
 // Pricing models for dropdown
 const pricingModels = [
@@ -55,6 +47,7 @@ const statusOptions = ['active', 'inactive', 'deprecated'];
 
 const Services: React.FC = () => {
   const [services, setServices] = useState<Service[]>([]);
+  const [businessUnits, setBusinessUnits] = useState<BusinessUnit[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [openDialog, setOpenDialog] = useState(false);
@@ -76,7 +69,34 @@ const Services: React.FC = () => {
 
   useEffect(() => {
     fetchServices();
+    fetchBusinessUnits();
   }, []);
+
+  // Fetch business units from API
+  const fetchBusinessUnits = async () => {
+    try {
+      const data = await businessUnitService.getAllBusinessUnits();
+      console.log('Business Units API response:', data);
+      
+      // Ensure we have an array of business units
+      let businessUnitsData: BusinessUnit[] = [];
+      
+      if (Array.isArray(data)) {
+        businessUnitsData = data;
+      } else if (data && typeof data === 'object') {
+        // If response is an object with a data property
+        const responseObj = data as any;
+        if (responseObj.data && Array.isArray(responseObj.data)) {
+          businessUnitsData = responseObj.data;
+        }
+      }
+      
+      setBusinessUnits(businessUnitsData);
+    } catch (err) {
+      console.error('Error fetching business units:', err);
+      // Don't set error state here to avoid overriding service errors
+    }
+  };
 
   // Fetch services from API
     const fetchServices = async () => {
@@ -407,7 +427,7 @@ const Services: React.FC = () => {
                 onChange={handleSelectChange}
               >
                 {businessUnits.map((unit) => (
-                  <MenuItem key={unit} value={unit}>{unit}</MenuItem>
+                  <MenuItem key={unit.id} value={unit.name}>{unit.name}</MenuItem>
                 ))}
               </Select>
             </FormControl>

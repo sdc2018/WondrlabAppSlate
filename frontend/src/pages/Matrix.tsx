@@ -251,7 +251,7 @@ const Matrix: React.FC = () => {
     
     // Check if it's an opportunity - either explicitly marked as 'opportunity' or has any valid opportunity status
     if (cell.status === 'opportunity' || 
-        (cell.status && ['new', 'in_progress', 'qualified', 'proposal', 'negotiation', 'won', 'lost', 'on_hold'].includes(cell.status))) {
+        (cell.status !== null && cell.status !== undefined && ['new', 'in_progress', 'qualified', 'proposal', 'negotiation', 'won', 'lost', 'on_hold'].includes(cell.status))) {
       return {
         backgroundColor: '#fff8e1', // Light amber
         cursor: 'pointer',
@@ -291,7 +291,7 @@ const Matrix: React.FC = () => {
     
     // Check if it's an opportunity - either explicitly marked as 'opportunity' or has any valid opportunity status
     if (cell.status === 'opportunity' || 
-        (cell.status && ['new', 'in_progress', 'qualified', 'proposal', 'negotiation', 'won', 'lost', 'on_hold'].includes(cell.status))) {
+        (cell.status !== null && cell.status !== undefined && ['new', 'in_progress', 'qualified', 'proposal', 'negotiation', 'won', 'lost', 'on_hold'].includes(cell.status))) {
       const opportunity = opportunities.find(o => o.id === cell.opportunity_id);
       console.log(`Found opportunity cell: clientId=${clientId}, serviceId=${serviceId}, status=${cell.status}, opportunity_id=${cell.opportunity_id}`);
       return (

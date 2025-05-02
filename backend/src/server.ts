@@ -16,6 +16,7 @@ import BusinessUnitModel from './models/BusinessUnit';
 
 // Import workflow service
 import workflowService from './services/workflowService';
+import businessUnitService from './services/businessUnitService';
 
 // Import routes
 import authRoutes from './routes/authRoutes';
@@ -111,6 +112,10 @@ app.listen(PORT, async () => {
   
   // Initialize database tables on server start
   await initDatabase();
+  
+  // Initialize default business units
+  console.log('Initializing default business units...');
+  await businessUnitService.initDefaultBusinessUnits();
   
   // Run workflows immediately on server start
   console.log('Running initial workflows...');
