@@ -214,6 +214,41 @@ class UserModel {
       throw error;
     }
   }
+
+  // Compare password with hashed password
+  async comparePassword(plainPassword: string, hashedPassword: string): Promise<boolean> {
+    try {
+      return await bcrypt.compare(plainPassword, hashedPassword);
+    } catch (error) {
+      console.error('Error comparing passwords:', error);
+      throw error;
+    }
+  }
+
+  // Update user password
+  async updatePassword(userId: number, newPassword: string): Promise<boolean> {
+    try {
+      // Hash the new password
+      const saltRounds = 10;
+      const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
+      
+      // Update the password in the database
+      const query = `
+        UPDATE users
+        SET password = $1, updated_at = CURRENT_TIMESTAMP
+        WHERE id = $2
+        RETURNING id
+      `;
+      
+      const result = await this.db.query(query, [hashedPassword, userId]);
+      
+      // Return true if a row was updated, false otherwise
+      return (result.rowCount ?? 0) > 0;
+    } catch (error) {
+      console.error('Error updating password:', error);
+      throw error;
+    }
+  }
 }
 
 // Export an instance of the model with the database connection

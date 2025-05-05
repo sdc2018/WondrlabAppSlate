@@ -34,6 +34,7 @@ import DomainIcon from '@mui/icons-material/Domain';
 import ExpandLess from '@mui/icons-material/ExpandLess';
 import ExpandMore from '@mui/icons-material/ExpandMore';
 import { useNavigate, useLocation, Outlet } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
 
 const drawerWidth = 240;
 
@@ -118,8 +119,10 @@ const Layout: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Placeholder for user role - will be replaced with actual auth context
-  const userRole = localStorage.getItem('userRole') || 'admin';
+  // Use the auth context to get user role and logout function
+  const { userRole: authUserRole, logout } = useAuth();
+  // Provide a default value for userRole when it might be null
+  const userRole = authUserRole || 'guest';
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
@@ -133,10 +136,14 @@ const Layout: React.FC = () => {
     setUserMenuAnchorEl(null);
   };
 
+  const handleProfileClick = () => {
+    navigate('/profile');
+    setUserMenuAnchorEl(null);
+  };
+
   const handleLogout = () => {
-    localStorage.removeItem('authToken');
-    localStorage.removeItem('userRole');
-    navigate('/login');
+    logout();
+    // No need to manually navigate as the logout method in AuthContext already handles this
   };
 
   const handleNotificationsClick = () => {
@@ -298,7 +305,10 @@ const Layout: React.FC = () => {
             open={Boolean(userMenuAnchorEl)}
             onClose={handleUserMenuClose}
           >
-            <MenuItem onClick={handleUserMenuClose}>Profile</MenuItem>
+            <MenuItem onClick={handleProfileClick}>
+              <AccountCircle fontSize="small" sx={{ mr: 1 }} />
+              Profile
+            </MenuItem>
             <MenuItem onClick={handleLogout}>
               <LogoutIcon fontSize="small" sx={{ mr: 1 }} />
               Logout

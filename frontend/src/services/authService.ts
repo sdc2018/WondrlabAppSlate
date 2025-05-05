@@ -103,6 +103,33 @@ const authService = {
    */
   getUserRole: (): string | null => {
     return localStorage.getItem('userRole');
+  },
+
+  /**
+   * Change user password
+   */
+  changePassword: async (currentPassword: string, newPassword: string): Promise<void> => {
+    try {
+      await api.post('/auth/change-password', { currentPassword, newPassword });
+      console.log('Password changed successfully');
+    } catch (error) {
+      console.error('Password change error:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Update user profile
+   */
+  updateProfile: async (username: string): Promise<User> => {
+    try {
+      const response: AxiosResponse<User> = await api.put('/auth/profile', { username });
+      console.log('Profile updated successfully');
+      return response.data;
+    } catch (error) {
+      console.error('Profile update error:', error);
+      throw error;
+    }
   }
 };
 

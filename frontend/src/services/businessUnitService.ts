@@ -6,6 +6,7 @@ export interface BusinessUnit {
   name: string;
   description?: string;
   status: string;
+  owner_id?: number;
   created_at: string;
   updated_at: string;
 }
@@ -14,6 +15,7 @@ export interface BusinessUnitInput {
   name: string;
   description?: string;
   status: string;
+  owner_id?: number;
 }
 
 const businessUnitService = {

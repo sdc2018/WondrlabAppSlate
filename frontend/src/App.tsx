@@ -17,6 +17,7 @@ import Tasks from './pages/Tasks';
 import Notifications from './pages/Notifications';
 import BusinessUnits from './pages/BusinessUnits';
 import Users from './pages/Users';
+import Profile from './pages/Profile';
 
 // Create theme
 const theme = createTheme({
@@ -69,6 +70,7 @@ function AppRoutes() {
         <Route path="matrix" element={<Matrix />} />
         <Route path="tasks" element={<Tasks />} />
         <Route path="notifications" element={<Notifications />} />
+        <Route path="profile" element={<Profile />} />
         
         {/* Admin routes */}
         <Route path="admin">

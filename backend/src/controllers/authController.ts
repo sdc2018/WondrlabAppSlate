@@ -140,3 +140,95 @@ export const getCurrentUser = async (req: Request, res: Response): Promise<void>
     res.status(500).json({ message: 'Server error' });
   }
 };
+
+// Change user password
+export const changePassword = async (req: Request, res: Response): Promise<void> => {
+  try {
+    // The user ID is attached to the request by the auth middleware
+    const userId = (req as any).user?.userId;
+    
+    if (!userId) {
+      res.status(401).json({ message: 'Not authenticated' });
+      return;
+    }
+
+    const { currentPassword, newPassword } = req.body;
+
+    // Validate input
+    if (!currentPassword || !newPassword) {
+      res.status(400).json({ message: 'Current password and new password are required' });
+      return;
+    }
+
+    // Get user
+    const user = await UserModel.findById(userId);
+    if (!user) {
+      res.status(404).json({ message: 'User not found' });
+      return;
+    }
+
+    // Verify current password
+    const isPasswordValid = await UserModel.comparePassword(currentPassword, user.password);
+    if (!isPasswordValid) {
+      res.status(401).json({ message: 'Current password is incorrect' });
+      return;
+    }
+
+    // Update password
+    await UserModel.updatePassword(userId, newPassword);
+
+    res.status(200).json({ message: 'Password changed successfully' });
+  } catch (error) {
+    console.error('Change password error:', error);
+    res.status(500).json({ message: 'Server error during password change' });
+  }
+};
+
+// Update user profile
+export const updateProfile = async (req: Request, res: Response): Promise<void> => {
+  try {
+    // The user ID is attached to the request by the auth middleware
+    const userId = (req as any).user?.userId;
+    
+    if (!userId) {
+      res.status(401).json({ message: 'Not authenticated' });
+      return;
+    }
+
+    const { username } = req.body;
+
+    // Validate input
+    if (!username) {
+      res.status(400).json({ message: 'Username is required' });
+      return;
+    }
+
+    // Check if username is already taken by another user
+    const existingUser = await UserModel.findByUsername(username);
+    if (existingUser && existingUser.id !== userId) {
+      res.status(409).json({ message: 'Username already in use by another user' });
+      return;
+    }
+
+    // Update user profile
+    const updatedUser = await UserModel.update(userId, { username });
+    
+    if (!updatedUser) {
+      res.status(404).json({ message: 'User not found or no changes made' });
+      return;
+    }
+
+    // Return updated user data (excluding password)
+    res.status(200).json({
+      id: updatedUser.id,
+      username: updatedUser.username,
+      email: updatedUser.email,
+      role: updatedUser.role,
+      created_at: updatedUser.created_at,
+      updated_at: updatedUser.updated_at
+    });
+  } catch (error) {
+    console.error('Update profile error:', error);
+    res.status(500).json({ message: 'Server error during profile update' });
+  }
+};

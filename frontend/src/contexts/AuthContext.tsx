@@ -12,6 +12,7 @@ interface AuthContextType {
   register: (userData: RegisterData) => Promise<void>;
   logout: () => void;
   clearError: () => void;
+  updateUser: (userData: User) => void;
 }
 
 // Create the context with a default value
@@ -25,6 +26,7 @@ const AuthContext = createContext<AuthContextType>({
   register: async () => {},
   logout: () => {},
   clearError: () => {},
+  updateUser: () => {},
 });
 
 // Custom hook to use the auth context
@@ -117,6 +119,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setError(null);
   };
 
+  // Update user function
+  const updateUser = (userData: User) => {
+    setUser(userData);
+  };
+
   // Create the value object for the context
   const value = {
     isAuthenticated,
@@ -128,6 +135,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     register,
     logout,
     clearError,
+    updateUser,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

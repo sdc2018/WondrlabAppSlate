@@ -18,18 +18,25 @@ import {
   IconButton, 
   CircularProgress,
   Alert,
-  Stack
+  Stack,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  SelectChangeEvent
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 
-// Import business unit service
+// Import services
 import businessUnitService, { BusinessUnit, BusinessUnitInput } from '../services/businessUnitService';
+import userService from '../services/userService';
 
 const BusinessUnits: React.FC = () => {
   // State for business units
   const [businessUnits, setBusinessUnits] = useState<BusinessUnit[]>([]);
+  const [buHeads, setBuHeads] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -38,13 +45,26 @@ const BusinessUnits: React.FC = () => {
   const [formData, setFormData] = useState<BusinessUnitInput>({
     name: '',
     description: '',
-    status: 'active'
+    status: 'active',
+    owner_id: undefined
   });
 
-  // Fetch business units on component mount
+  // Fetch business units and BU heads on component mount
   useEffect(() => {
     fetchBusinessUnits();
+    fetchBuHeads();
   }, []);
+
+  // Fetch business unit heads from API
+  const fetchBuHeads = async () => {
+    try {
+      const heads = await userService.getUsersByRole('bu_head');
+      console.log('Business Unit Heads:', heads);
+      setBuHeads(heads);
+    } catch (err) {
+      console.error('Error fetching business unit heads:', err);
+    }
+  };
 
   // Fetch business units from API
   const fetchBusinessUnits = async () => {
@@ -92,7 +112,8 @@ const BusinessUnits: React.FC = () => {
         setFormData({
           name: businessUnit.name,
           description: businessUnit.description || '',
-          status: businessUnit.status
+          status: businessUnit.status,
+          owner_id: businessUnit.owner_id
         });
           
         setLoading(false);
@@ -108,7 +129,8 @@ const BusinessUnits: React.FC = () => {
       setFormData({
         name: '',
         description: '',
-        status: 'active'
+        status: 'active',
+        owner_id: undefined
       });
     }
     
@@ -128,6 +150,15 @@ const BusinessUnits: React.FC = () => {
     setFormData({
       ...formData,
       [name]: value
+    });
+  };
+
+  // Handle select input changes
+  const handleSelectChange = (e: SelectChangeEvent) => {
+    const { name, value } = e.target;
+    setFormData({
+      ...formData,
+      [name]: value === '' ? undefined : Number(value)
     });
   };
 
@@ -215,13 +246,14 @@ const BusinessUnits: React.FC = () => {
             <TableRow>
               <TableCell>Name</TableCell>
               <TableCell>Description</TableCell>
+              <TableCell>Owner</TableCell>
               <TableCell align="right">Actions</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
             {businessUnits.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={3} align="center">
+                <TableCell colSpan={4} align="center">
                   No business units found. Create your first business unit by clicking "Add Business Unit".
                 </TableCell>
               </TableRow>
@@ -230,6 +262,11 @@ const BusinessUnits: React.FC = () => {
               <TableRow key={businessUnit.id}>
                 <TableCell>{businessUnit.name}</TableCell>
                 <TableCell>{businessUnit.description}</TableCell>
+                <TableCell>
+                  {businessUnit.owner_id ? 
+                    buHeads.find(head => head.id === businessUnit.owner_id)?.username || 'Unknown' 
+                    : 'None'}
+                </TableCell>
                 <TableCell align="right">
                   <IconButton onClick={() => handleOpenDialog(businessUnit.id)} size="small">
                     <EditIcon />
@@ -269,6 +306,26 @@ const BusinessUnits: React.FC = () => {
               value={formData.name}
               onChange={handleInputChange}
             />
+            <FormControl fullWidth margin="normal">
+              <InputLabel id="owner-select-label">Business Unit Owner</InputLabel>
+              <Select
+                labelId="owner-select-label"
+                id="owner-select"
+                name="owner_id"
+                value={formData.owner_id?.toString() || ''}
+                label="Business Unit Owner"
+                onChange={handleSelectChange}
+              >
+                <MenuItem value="">
+                  <em>None</em>
+                </MenuItem>
+                {buHeads.map((head) => (
+                  <MenuItem key={head.id} value={head.id.toString()}>
+                    {head.username}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
             <TextField
               margin="normal"
               fullWidth
