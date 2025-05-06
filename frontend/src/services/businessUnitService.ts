@@ -18,14 +18,33 @@ export interface BusinessUnitInput {
   owner_id?: number;
 }
 
+// Interface for standardized API responses
+interface ApiResponse<T> {
+  success: boolean;
+  message?: string;
+  data?: T;
+  businessUnit?: T; // For backward compatibility with older endpoints
+}
+
 const businessUnitService = {
   /**
    * Get all business units
    */
   getAllBusinessUnits: async (): Promise<BusinessUnit[]> => {
     try {
-      const response: AxiosResponse<BusinessUnit[]> = await api.get('/admin/business-units');
+      const response = await api.get('/admin/business-units');
+      
+      // Handle both old and new response formats
+      if (response.data && response.data.data && Array.isArray(response.data.data)) {
+        // New format with data property
+        return response.data.data;
+      } else if (Array.isArray(response.data)) {
+        // Old format with direct array
       return response.data;
+      } else {
+        console.error('Unexpected response format:', response.data);
+        return [];
+      }
     } catch (error) {
       console.error('Error fetching business units:', error);
       throw error;
@@ -37,8 +56,22 @@ const businessUnitService = {
    */
   getBusinessUnitById: async (id: number): Promise<BusinessUnit> => {
     try {
-      const response: AxiosResponse<BusinessUnit> = await api.get(`/admin/business-units/${id}`);
-      return response.data;
+      const response = await api.get(`/admin/business-units/${id}`);
+      
+      // Handle both old and new response formats
+      if (response.data && response.data.data) {
+        // New format with data property
+        return response.data.data;
+      } else if (response.data && response.data.businessUnit) {
+        // Old format with businessUnit property
+        return response.data.businessUnit;
+      } else if (response.data && typeof response.data === 'object' && 'id' in response.data) {
+        // Old format with direct object
+        return response.data as BusinessUnit;
+      } else {
+        console.error('Unexpected response format:', response.data);
+        throw new Error('Invalid response format');
+      }
     } catch (error) {
       console.error(`Error fetching business unit with ID ${id}:`, error);
       throw error;
@@ -50,8 +83,22 @@ const businessUnitService = {
    */
   createBusinessUnit: async (businessUnitData: BusinessUnitInput): Promise<BusinessUnit> => {
     try {
-      const response: AxiosResponse<BusinessUnit> = await api.post('/admin/business-units', businessUnitData);
-      return response.data;
+      const response = await api.post('/admin/business-units', businessUnitData);
+      
+      // Handle both old and new response formats
+      if (response.data && response.data.data) {
+        // New format with data property
+        return response.data.data;
+      } else if (response.data && response.data.businessUnit) {
+        // Old format with businessUnit property
+        return response.data.businessUnit;
+      } else if (response.data && typeof response.data === 'object' && 'id' in response.data) {
+        // Old format with direct object
+        return response.data as BusinessUnit;
+      } else {
+        console.error('Unexpected response format:', response.data);
+        throw new Error('Invalid response format');
+      }
     } catch (error) {
       console.error('Error creating business unit:', error);
       throw error;
@@ -63,8 +110,22 @@ const businessUnitService = {
    */
   updateBusinessUnit: async (id: number, businessUnitData: Partial<BusinessUnitInput>): Promise<BusinessUnit> => {
     try {
-      const response: AxiosResponse<BusinessUnit> = await api.put(`/admin/business-units/${id}`, businessUnitData);
-      return response.data;
+      const response = await api.put(`/admin/business-units/${id}`, businessUnitData);
+      
+      // Handle both old and new response formats
+      if (response.data && response.data.data) {
+        // New format with data property
+        return response.data.data;
+      } else if (response.data && response.data.businessUnit) {
+        // Old format with businessUnit property
+        return response.data.businessUnit;
+      } else if (response.data && typeof response.data === 'object' && 'id' in response.data) {
+        // Old format with direct object
+        return response.data as BusinessUnit;
+      } else {
+        console.error('Unexpected response format:', response.data);
+        throw new Error('Invalid response format');
+      }
     } catch (error) {
       console.error(`Error updating business unit with ID ${id}:`, error);
       throw error;
@@ -88,8 +149,22 @@ const businessUnitService = {
    */
   changeBusinessUnitStatus: async (id: number, status: string): Promise<BusinessUnit> => {
     try {
-      const response: AxiosResponse<BusinessUnit> = await api.patch(`/admin/business-units/${id}/status`, { status });
-      return response.data;
+      const response = await api.patch(`/admin/business-units/${id}/status`, { status });
+      
+      // Handle both old and new response formats
+      if (response.data && response.data.data) {
+        // New format with data property
+        return response.data.data;
+      } else if (response.data && response.data.businessUnit) {
+        // Old format with businessUnit property
+        return response.data.businessUnit;
+      } else if (response.data && typeof response.data === 'object' && 'id' in response.data) {
+        // Old format with direct object
+        return response.data as BusinessUnit;
+      } else {
+        console.error('Unexpected response format:', response.data);
+        throw new Error('Invalid response format');
+      }
     } catch (error) {
       console.error(`Error changing business unit status with ID ${id}:`, error);
       throw error;

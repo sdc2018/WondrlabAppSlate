@@ -254,18 +254,34 @@ export class NotificationModel {
 
   // Helper method to find BU Head for a specific business unit
   async findBUHeadByBusinessUnit(businessUnit: string): Promise<number | null> {
-    const query = `
+    try {
+      // Find the business unit by name
+      const buQuery = `
+        SELECT owner_id FROM business_units 
+        WHERE name = $1 AND status = 'active'
+        LIMIT 1
+      `;
+      
+      const buResult = await this.pool.query(buQuery, [businessUnit]);
+      
+      // If business unit found and has an owner_id
+      if (buResult.rows.length > 0 && buResult.rows[0]?.owner_id) {
+        return buResult.rows[0].owner_id;
+      }
+      
+      // Fallback: If no business unit found or no owner_id, try to find a BU_HEAD user
+      const userQuery = `
       SELECT id FROM users 
-      WHERE role = $1 AND business_unit = $2
+        WHERE role = $1
       LIMIT 1
     `;
-    
-    try {
-      const result = await this.pool.query(query, [UserRole.BU_HEAD, businessUnit]);
-      return result.rows.length ? result.rows[0].id : null;
+      
+      const userResult = await this.pool.query(userQuery, [UserRole.BU_HEAD]);
+      
+      return userResult.rows.length > 0 && userResult.rows[0]?.id ? userResult.rows[0].id : null;
     } catch (error) {
       console.error('Error finding BU Head by business unit:', error);
-      throw error;
+      return null;
     }
   }
 }

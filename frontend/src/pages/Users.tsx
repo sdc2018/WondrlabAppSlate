@@ -197,30 +197,44 @@ const Users: React.FC = () => {
 
     try {
       setSubmitting(true);
+      setError(null);
       
       if (currentUser) {
-        // Update existing user - this is a placeholder since we don't have a real update user endpoint yet
+        // Update existing user
         console.log('Updating user:', { id: currentUser.id, ...formData });
-        // In a real implementation, we would call userService.updateUser(currentUser.id, formData)
-        // For now, just update the local state
-        setUsers(users.map(u => u.id === currentUser.id ? { ...u, ...formData } : u));
-      } else {
-        // Create new user - this is a placeholder since we don't have a real create user endpoint yet
-        console.log('Creating user:', formData);
-        // In a real implementation, we would call userService.createUser(formData)
-        // For now, just update the local state with a mock ID
-        const newUser = { 
-          id: Math.max(...users.map(u => u.id), 0) + 1, 
-          ...formData 
+        
+        // Create update data object (omit password if empty)
+        const updateData: Partial<UserInput> = {
+          username: formData.username,
+          email: formData.email,
+          role: formData.role
         };
+        
+        // Only include password if it's not empty
+        if (formData.password) {
+          updateData.password = formData.password;
+        }
+        
+        // Call API to update user
+        const updatedUser = await userService.updateUser(currentUser.id, updateData);
+        
+        // Update local state with the response from the API
+        setUsers(users.map(u => u.id === currentUser.id ? updatedUser : u));
+      } else {
+        // Create new user
+        console.log('Creating user:', formData);
+        
+        // Call API to create user
+        const newUser = await userService.createUser(formData);
+        
+        // Update local state with the response from the API
         setUsers([...users, newUser]);
       }
       
       handleCloseDialog();
-      setError(null);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error saving user:', err);
-      setError('Failed to save user. Please try again.');
+      setError(err.response?.data?.message || 'Failed to save user. Please try again.');
     } finally {
       setSubmitting(false);
     }
@@ -234,14 +248,17 @@ const Users: React.FC = () => {
     
     try {
       setLoading(true);
-      // In a real implementation, we would call userService.deleteUser(id)
-      // For now, just update the local state
-      console.log('Deleting user:', id);
-      setUsers(users.filter(u => u.id !== id));
       setError(null);
-    } catch (err) {
+      
+      // Call API to delete user
+      console.log('Deleting user:', id);
+      await userService.deleteUser(id);
+      
+      // Update local state after successful deletion
+      setUsers(users.filter(u => u.id !== id));
+    } catch (err: any) {
       console.error('Error deleting user:', err);
-      setError('Failed to delete user. Please try again.');
+      setError(err.response?.data?.message || 'Failed to delete user. Please try again.');
     } finally {
       setLoading(false);
     }

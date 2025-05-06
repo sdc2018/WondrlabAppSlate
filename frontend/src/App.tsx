@@ -1,13 +1,17 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { ThemeProvider, createTheme, CssBaseline } from '@mui/material';
+import { ThemeProvider, createTheme } from '@mui/material/styles';
+import CssBaseline from '@mui/material/CssBaseline';
 
-// Import context
-import { AuthProvider, useAuth } from './contexts/AuthContext';
-
-// Import components
-import Login from './pages/Login';
+// Components
 import Layout from './components/Layout';
+
+// Contexts
+import { AuthProvider } from './contexts/AuthContext';
+import { useAuth } from './contexts/AuthContext';
+
+// Pages
+import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Services from './pages/Services';
 import Clients from './pages/Clients';
@@ -15,9 +19,10 @@ import Opportunities from './pages/Opportunities';
 import Matrix from './pages/Matrix';
 import Tasks from './pages/Tasks';
 import Notifications from './pages/Notifications';
-import BusinessUnits from './pages/BusinessUnits';
-import Users from './pages/Users';
 import Profile from './pages/Profile';
+import Users from './pages/Users';
+import BusinessUnits from './pages/BusinessUnits';
+import Industries from './pages/Industries';
 
 // Create theme
 const theme = createTheme({
@@ -76,6 +81,7 @@ function AppRoutes() {
         <Route path="admin">
           <Route path="users" element={<Users />} />
           <Route path="business-units" element={<BusinessUnits />} />
+          <Route path="industries" element={<Industries />} />
         </Route>
           </Route>
           

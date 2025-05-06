@@ -24,13 +24,15 @@ import {
   CircularProgress,
   Stack,
   Alert,
-  SelectChangeEvent
+  SelectChangeEvent,
+  Autocomplete
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import serviceService, { Service, ServiceInput } from '../services/serviceService';
 import businessUnitService, { BusinessUnit } from '../services/businessUnitService';
+import industryService, { Industry } from '../services/industryService';
 
 // Pricing models for dropdown
 const pricingModels = [
@@ -48,6 +50,7 @@ const statusOptions = ['active', 'inactive', 'deprecated'];
 const Services: React.FC = () => {
   const [services, setServices] = useState<Service[]>([]);
   const [businessUnits, setBusinessUnits] = useState<BusinessUnit[]>([]);
+  const [industries, setIndustries] = useState<Industry[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [openDialog, setOpenDialog] = useState(false);
@@ -64,13 +67,23 @@ const Services: React.FC = () => {
   });
   const [error, setError] = useState<string | null>(null);
 
-  // Convert array to comma-separated string for form input
-  const [industriesString, setIndustriesString] = useState('');
-
   useEffect(() => {
     fetchServices();
     fetchBusinessUnits();
+    fetchIndustries();
   }, []);
+
+  // Fetch industries from API
+  const fetchIndustries = async () => {
+    try {
+      const data = await industryService.getActiveIndustries();
+      console.log('Industries API response:', data);
+      setIndustries(data);
+    } catch (err) {
+      console.error('Error fetching industries:', err);
+      // Don't set error state here to avoid overriding service errors
+    }
+  };
 
   // Fetch business units from API
   const fetchBusinessUnits = async () => {
@@ -130,18 +143,11 @@ const Services: React.FC = () => {
     };
 
   const handleOpenDialog = async (serviceId?: number) => {
-    // Reset form
-    setIndustriesString('');
-    
     if (serviceId) {
       try {
         setLoading(true);
         const service = await serviceService.getServiceById(serviceId);
       setCurrentService(service);
-        
-        // Convert industries array to comma-separated string for the form
-        const industriesStr = service.applicable_industries.join(', ');
-        setIndustriesString(industriesStr);
         
       setFormData({
         name: service.name,
@@ -189,14 +195,10 @@ const Services: React.FC = () => {
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     
-    if (name === 'applicable_industries') {
-      setIndustriesString(value);
-    } else {
     setFormData({
       ...formData,
       [name]: value
     });
-    }
   };
 
   // Handle select input changes
@@ -205,6 +207,14 @@ const Services: React.FC = () => {
       setFormData({
         ...formData,
         [name]: value
+      });
+  };
+
+  // Handle industries multi-select changes
+  const handleIndustriesChange = (_event: React.SyntheticEvent, value: Industry[]) => {
+    setFormData({
+      ...formData,
+      applicable_industries: value.map(industry => industry.name)
       });
   };
 
@@ -218,16 +228,9 @@ const Services: React.FC = () => {
     try {
       setSubmitting(true);
       
-      // Convert comma-separated industries string to array
-      const industriesArray = industriesString
-        .split(',')
-        .map(i => i.trim())
-        .filter(i => i.length > 0);
-      
       // Prepare data for API
       const serviceData: ServiceInput = {
-        ...formData,
-        applicable_industries: industriesArray
+        ...formData
       };
       
       if (currentService) {
@@ -452,15 +455,25 @@ const Services: React.FC = () => {
               value={formData.pricing_details}
               onChange={handleInputChange}
             />
+            <FormControl fullWidth margin="normal">
+              <Autocomplete
+                multiple
+                options={industries}
+                getOptionLabel={(option) => option.name}
+                isOptionEqualToValue={(option, value) => option.name === value.name}
+                value={industries.filter(industry => 
+                  formData.applicable_industries.includes(industry.name)
+                )}
+                onChange={handleIndustriesChange}
+                renderInput={(params) => (
             <TextField
-              margin="normal"
-              fullWidth
-              label="Applicable Industries (comma-separated)"
-              name="applicable_industries"
-                value={industriesString}
-              onChange={handleInputChange}
-              helperText="Enter industries separated by commas (e.g., Retail, Technology, Finance)"
-            />
+                    {...params}
+                    label="Applicable Industries"
+                    placeholder="Select industries"
+                  />
+                )}
+              />
+            </FormControl>
             <TextField
               margin="normal"
               fullWidth

@@ -1,5 +1,5 @@
-// import api from './api';
-// import { AxiosResponse } from 'axios';
+import api from './api';
+import { AxiosResponse } from 'axios';
 import { User } from './authService';
 
 // Extended user interface with additional fields if needed
@@ -8,41 +8,22 @@ export interface UserWithDetails extends User {
   // but not included in the basic User interface
 }
 
+// Interface for user input when creating/updating users
+export interface UserInput {
+  username: string;
+  email: string;
+  password?: string; // Optional for updates
+  role: string;
+}
+
 const userService = {
   /**
    * Get all users
    */
   getAllUsers: async (): Promise<User[]> => {
     try {
-      // In a real implementation, this would call a backend endpoint
-      // For now, we'll simulate an API call with mock data since the endpoint might not exist yet
-      
-      // Uncomment this when the endpoint is available:
-      // const response: AxiosResponse<User[]> = await api.get('/users');
-      // return response.data;
-      
-      // Mock implementation
-      await new Promise(resolve => setTimeout(resolve, 300)); // Simulate network delay
-      
-      // Mock users data - updated to match actual database IDs (31-44)
-      const mockUsers: User[] = [
-        { id: 31, username: 'admin', email: 'admin@wondrlab.com', role: 'admin' },
-        { id: 32, username: 'sales1', email: 'sales1@wondrlab.com', role: 'sales' },
-        { id: 33, username: 'sales2', email: 'sales2@wondrlab.com', role: 'sales' },
-        { id: 34, username: 'sales3', email: 'sales3@wondrlab.com', role: 'sales' },
-        { id: 35, username: 'sales4', email: 'sales4@wondrlab.com', role: 'sales' },
-        { id: 36, username: 'sales5', email: 'sales5@wondrlab.com', role: 'sales' },
-        { id: 37, username: 'buhead_creative', email: 'buhead_creative@wondrlab.com', role: 'bu_head' },
-        { id: 38, username: 'buhead_digitalmarketing', email: 'buhead_digitalmarketing@wondrlab.com', role: 'bu_head' },
-        { id: 39, username: 'buhead_contentproduction', email: 'buhead_contentproduction@wondrlab.com', role: 'bu_head' },
-        { id: 40, username: 'buhead_mediaplanning', email: 'buhead_mediaplanning@wondrlab.com', role: 'bu_head' },
-        { id: 41, username: 'buhead_strategy', email: 'buhead_strategy@wondrlab.com', role: 'bu_head' },
-        { id: 42, username: 'manager1', email: 'manager1@wondrlab.com', role: 'senior_management' },
-        { id: 43, username: 'manager2', email: 'manager2@wondrlab.com', role: 'senior_management' },
-        { id: 44, username: 'manager3', email: 'manager3@wondrlab.com', role: 'senior_management' }
-      ];
-      
-      return mockUsers;
+      const response: AxiosResponse<User[]> = await api.get('/users');
+      return response.data;
     } catch (error) {
       console.error('Error fetching users:', error);
       throw error;
@@ -54,26 +35,48 @@ const userService = {
    */
   getUserById: async (id: number): Promise<User> => {
     try {
-      // In a real implementation, this would call a backend endpoint
-      // For now, we'll get all users and find the one with the matching ID
-      
-      // Uncomment this when the endpoint is available:
-      // const response: AxiosResponse<User> = await api.get(`/users/${id}`);
-      // return response.data;
-      
-      // Mock implementation
-      await new Promise(resolve => setTimeout(resolve, 100)); // Simulate network delay
-      
-      const users = await userService.getAllUsers();
-      const user = users.find(user => user.id === id);
-      
-      if (!user) {
-        throw new Error(`User with ID ${id} not found`);
-      }
-      
-      return user;
+      const response: AxiosResponse<User> = await api.get(`/users/${id}`);
+      return response.data;
     } catch (error) {
       console.error(`Error fetching user with ID ${id}:`, error);
+      throw error;
+    }
+  },
+
+  /**
+   * Create a new user
+   */
+  createUser: async (userData: UserInput): Promise<User> => {
+    try {
+      const response: AxiosResponse<User> = await api.post('/users', userData);
+      return response.data;
+    } catch (error) {
+      console.error('Error creating user:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Update an existing user
+   */
+  updateUser: async (id: number, userData: Partial<UserInput>): Promise<User> => {
+    try {
+      const response: AxiosResponse<User> = await api.put(`/users/${id}`, userData);
+      return response.data;
+    } catch (error) {
+      console.error(`Error updating user with ID ${id}:`, error);
+      throw error;
+    }
+  },
+
+  /**
+   * Delete a user
+   */
+  deleteUser: async (id: number): Promise<void> => {
+    try {
+      await api.delete(`/users/${id}`);
+    } catch (error) {
+      console.error(`Error deleting user with ID ${id}:`, error);
       throw error;
     }
   },
@@ -83,9 +86,8 @@ const userService = {
    */
   getUsersByRole: async (role: string): Promise<User[]> => {
     try {
-      // In a real implementation, this would call a backend endpoint with a role parameter
-      // For now, we'll get all users and filter them
-      
+      // Get all users and filter by role
+      // In a future update, this could be replaced with a dedicated endpoint
       const users = await userService.getAllUsers();
       return users.filter(user => user.role === role);
     } catch (error) {

@@ -106,6 +106,12 @@ const navigationItems: NavigationItem[] = [
         path: '/admin/business-units',
         icon: <DomainIcon />,
         roles: ['admin']
+      },
+      {
+        text: 'Industries',
+        path: '/admin/industries',
+        icon: <CategoryIcon />,
+        roles: ['admin']
       }
     ]
   }

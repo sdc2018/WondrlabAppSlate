@@ -17,6 +17,7 @@ export interface BusinessUnit {
   name: string;
   description: string;
   status: BusinessUnitStatus;
+  owner_id?: number | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -28,6 +29,7 @@ export interface BusinessUnitInput {
   name: string;
   description: string;
   status: BusinessUnitStatus;
+  owner_id?: number | null;
 }
 
 /**
@@ -50,6 +52,7 @@ class BusinessUnitModel {
         name VARCHAR(100) UNIQUE NOT NULL,
         description TEXT NOT NULL,
         status VARCHAR(20) NOT NULL,
+        owner_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       )
@@ -70,16 +73,17 @@ class BusinessUnitModel {
   async create(businessUnitData: BusinessUnitInput): Promise<BusinessUnit> {
     const query = `
       INSERT INTO business_units (
-        name, description, status
+        name, description, status, owner_id
       )
-      VALUES ($1, $2, $3)
+      VALUES ($1, $2, $3, $4)
       RETURNING *
     `;
 
     const values = [
       businessUnitData.name,
       businessUnitData.description,
-      businessUnitData.status
+      businessUnitData.status,
+      businessUnitData.owner_id || null
     ];
 
     try {
@@ -162,22 +166,30 @@ class BusinessUnitModel {
 
     // Add each field that is provided
     Object.keys(businessUnitData).forEach(key => {
-      if (businessUnitData[key as keyof Partial<BusinessUnitInput>] !== undefined) {
+      // Special handling for owner_id to allow null values
+      if (key === 'owner_id') {
+        setFields.push(`${key} = $${paramIndex}`);
+        values.push(businessUnitData.owner_id === undefined ? null : businessUnitData.owner_id);
+        paramIndex++;
+      } 
+      else if (businessUnitData[key as keyof Partial<BusinessUnitInput>] !== undefined) {
         setFields.push(`${key} = $${paramIndex}`);
         values.push(businessUnitData[key as keyof Partial<BusinessUnitInput>]);
         paramIndex++;
       }
     });
-    
-    // Add updated_at
-    setFields.push(`updated_at = CURRENT_TIMESTAMP`);
 
     // If no fields to update, return null
-    if (setFields.length === 1) {
+    if (setFields.length === 0) {
       return null;
     }
 
-    // Add the ID as the last parameter
+    // Add updated_at timestamp
+    setFields.push(`updated_at = $${paramIndex}`);
+    values.push(new Date());
+    paramIndex++;
+
+    // Add id to values array for WHERE clause
     values.push(id);
 
     const query = `
@@ -191,7 +203,7 @@ class BusinessUnitModel {
       const result = await this.pool.query(query, values);
       return result.rows.length ? result.rows[0] : null;
     } catch (error) {
-      console.error('Error updating business unit:', error);
+      console.error(`Error updating business unit with ID ${id}:`, error);
       throw error;
     }
   }
