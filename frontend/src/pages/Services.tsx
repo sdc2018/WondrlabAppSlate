@@ -1,38 +1,41 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Box, 
   Typography, 
-  Paper, 
   Button,
+  TextField, 
+  Dialog, 
+  DialogTitle, 
+  DialogContent, 
+  DialogActions, 
   Table,
   TableBody,
   TableCell,
   TableContainer,
   TableHead,
   TableRow,
-  Chip,
+  Paper, 
   IconButton,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  TextField,
+  CircularProgress, 
+  Alert, 
+  Stack,
   FormControl,
   InputLabel,
   Select,
   MenuItem,
-  CircularProgress,
-  Stack,
-  Alert,
   SelectChangeEvent,
+  Chip,
   Autocomplete
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
+import FileUploadIcon from '@mui/icons-material/FileUpload';
+import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import serviceService, { Service, ServiceInput } from '../services/serviceService';
 import businessUnitService, { BusinessUnit } from '../services/businessUnitService';
 import industryService, { Industry } from '../services/industryService';
+import { exportToCSV, parseCSVFile, validateCSVData } from '../utils/csvUtils';
 
 // Pricing models for dropdown
 const pricingModels = [
@@ -48,6 +51,7 @@ const pricingModels = [
 const statusOptions = ['active', 'inactive', 'deprecated'];
 
 const Services: React.FC = () => {
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [services, setServices] = useState<Service[]>([]);
   const [businessUnits, setBusinessUnits] = useState<BusinessUnit[]>([]);
   const [industries, setIndustries] = useState<Industry[]>([]);
@@ -55,6 +59,7 @@ const Services: React.FC = () => {
   const [submitting, setSubmitting] = useState(false);
   const [openDialog, setOpenDialog] = useState(false);
   const [currentService, setCurrentService] = useState<Service | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [formData, setFormData] = useState<ServiceInput>({
     name: '',
     description: '',
@@ -65,7 +70,6 @@ const Services: React.FC = () => {
     client_role: '',
     status: 'active'
   });
-  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchServices();
@@ -97,11 +101,9 @@ const Services: React.FC = () => {
       if (Array.isArray(data)) {
         businessUnitsData = data;
       } else if (data && typeof data === 'object') {
-        // If response is an object with a data property
-        const responseObj = data as any;
-        if (responseObj.data && Array.isArray(responseObj.data)) {
-          businessUnitsData = responseObj.data;
-        }
+        // Handle case where API returns an object with data property
+        const dataObj = data as { data?: any[] };
+        businessUnitsData = Array.isArray(dataObj.data) ? dataObj.data : [];
       }
       
       setBusinessUnits(businessUnitsData);
@@ -120,16 +122,15 @@ const Services: React.FC = () => {
       // Log the response for debugging
       console.log('Services API response:', response);
       
-      // Check if response is an array, otherwise handle appropriately
+      // Ensure we have an array of services
       let data: Service[] = [];
+      
       if (Array.isArray(response)) {
           data = response;
         } else if (response && typeof response === 'object') {
-          // If response is an object that might have a data property
-          const responseObj = response as Record<string, any>;
-          if (responseObj.data && Array.isArray(responseObj.data)) {
-            data = responseObj.data as Service[];
-          }
+        // Handle case where API returns an object with data property
+        const responseObj = response as { data?: any[] };
+        data = Array.isArray(responseObj.data) ? responseObj.data : [];
         }
       
       setServices(data);
@@ -142,6 +143,7 @@ const Services: React.FC = () => {
       }
     };
 
+  // Open dialog for adding/editing service
   const handleOpenDialog = async (serviceId?: number) => {
     if (serviceId) {
       try {
@@ -218,6 +220,7 @@ const Services: React.FC = () => {
       });
   };
 
+  // Handle form submission
   const handleSubmit = async () => {
     // Validate form data
     if (!formData.name || !formData.business_unit || !formData.pricing_model) {
@@ -253,6 +256,7 @@ const Services: React.FC = () => {
     }
   };
 
+  // Handle service deletion
   const handleDelete = async (id: number) => {
     if (!window.confirm('Are you sure you want to delete this service?')) {
       return;
@@ -271,6 +275,7 @@ const Services: React.FC = () => {
     }
   };
 
+  // Handle status change
   const handleStatusChange = async (id: number, newStatus: string) => {
     try {
       setLoading(true);
@@ -285,6 +290,7 @@ const Services: React.FC = () => {
     }
   };
 
+// Helper function to get status color
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'active':
@@ -298,18 +304,120 @@ const Services: React.FC = () => {
     }
   };
 
-  if (loading && services.length === 0) {
-    return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '50vh' }}>
-        <CircularProgress />
-      </Box>
-    );
-  }
+  // CSV Import/Export handlers
+  const handleImportClick = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  };
+
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (!event.target.files || event.target.files.length === 0) {
+      return;
+    }
+    
+    const file = event.target.files[0];
+    
+    try {
+      setLoading(true);
+      const parsedData = await parseCSVFile(file);
+      
+      // Validate required fields - only name is mandatory
+      const requiredFields = ['name'];
+      const validationResult = validateCSVData(parsedData, requiredFields);
+      
+      if (!validationResult.valid) {
+        setError(`Invalid CSV data: ${validationResult.errors.join(', ')}`);
+        return;
+      }
+      
+      // Process and create services
+      const createdServices = [];
+      for (const item of parsedData) {
+        try {
+          // Process applicable_industries (convert from string if needed)
+          const serviceData: ServiceInput = {
+            ...item,
+            applicable_industries: item.applicable_industries ? 
+              (typeof item.applicable_industries === 'string' ? 
+                item.applicable_industries.split(';').map((industry: string) => industry.trim()) : 
+                item.applicable_industries) : 
+              []
+          };
+          
+          const newService = await serviceService.createService(serviceData);
+          createdServices.push(newService);
+        } catch (err) {
+          console.error('Error creating service:', err);
+        }
+      }
+      
+      // Refresh services list
+      await fetchServices();
+      setError(null);
+      alert(`Successfully imported ${createdServices.length} services`);
+    } catch (err) {
+      console.error('Error importing services:', err);
+      setError('Failed to import services. Please check your CSV file format.');
+    } finally {
+      setLoading(false);
+      // Reset the file input
+      if (event.target.value) {
+        event.target.value = '';
+      }
+    }
+  };
+
+  const handleExportClick = () => {
+    // Prepare data for export
+    const dataToExport = services.map(service => ({
+      id: service.id,
+      name: service.name,
+      description: service.description,
+      business_unit: service.business_unit,
+      pricing_model: service.pricing_model,
+      pricing_details: service.pricing_details,
+      applicable_industries: service.applicable_industries.join(';'),
+      client_role: service.client_role,
+      status: service.status
+    }));
+    
+    exportToCSV(dataToExport, 'services');
+  };
 
   return (
     <Box>
+      {loading && services.length === 0 ? (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '50vh' }}>
+        <CircularProgress />
+      </Box>
+      ) : (
+        <>
+          {error && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {error}
+            </Alert>
+          )}
+          
       <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 3 }}>
         <Typography variant="h4">Services</Typography>
+            <Box>
+              <Button 
+                variant="outlined" 
+                startIcon={<FileUploadIcon />}
+                onClick={handleImportClick}
+                sx={{ mr: 1 }}
+              >
+                Import CSV
+              </Button>
+              <Button 
+                variant="outlined" 
+                startIcon={<FileDownloadIcon />}
+                onClick={handleExportClick}
+                sx={{ mr: 1 }}
+              >
+                Export CSV
+              </Button>
         <Button 
           variant="contained" 
           startIcon={<AddIcon />}
@@ -317,13 +425,8 @@ const Services: React.FC = () => {
         >
           Add Service
         </Button>
+            </Box>
       </Stack>
-
-      {error && (
-        <Alert severity="error" sx={{ mb: 2 }}>
-          {error}
-        </Alert>
-      )}
 
       <TableContainer component={Paper}>
         <Table>
@@ -349,26 +452,22 @@ const Services: React.FC = () => {
               <TableRow key={service.id}>
                 <TableCell>{service.name}</TableCell>
                 <TableCell>{service.business_unit}</TableCell>
+                    <TableCell>{service.pricing_model}</TableCell>
                 <TableCell>
-                  {service.pricing_model}
-                  <Typography variant="caption" display="block" color="text.secondary">
-                    {service.pricing_details}
-                  </Typography>
-                </TableCell>
-                <TableCell>
-                  {service.applicable_industries.length > 2 
-                    ? `${service.applicable_industries.slice(0, 2).join(', ')} +${service.applicable_industries.length - 2} more`
-                    : service.applicable_industries.join(', ')}
+                      {service.applicable_industries.map((industry, index) => (
+                        <Chip 
+                          key={index} 
+                          label={industry} 
+                          size="small" 
+                          sx={{ mr: 0.5, mb: 0.5 }} 
+                        />
+                      ))}
                 </TableCell>
                 <TableCell>
                   <Chip 
                     label={service.status} 
                     color={getStatusColor(service.status) as any}
                     size="small"
-                      onClick={() => {
-                        const newStatus = service.status === 'active' ? 'inactive' : 'active';
-                        handleStatusChange(service.id, newStatus);
-                      }}
                   />
                 </TableCell>
                 <TableCell align="right">
@@ -385,6 +484,8 @@ const Services: React.FC = () => {
           </TableBody>
         </Table>
       </TableContainer>
+        </>
+      )}
 
       {/* Add/Edit Service Dialog */}
       <Dialog 
@@ -402,6 +503,11 @@ const Services: React.FC = () => {
             </Box>
           ) : (
           <Box component="form" sx={{ mt: 1 }}>
+              {error && (
+                <Alert severity="error" sx={{ mb: 2 }}>
+                  {error}
+                </Alert>
+              )}
             <TextField
               margin="normal"
               required
@@ -497,11 +603,6 @@ const Services: React.FC = () => {
             </FormControl>
           </Box>
           )}
-          {error && (
-            <Alert severity="error" sx={{ mt: 2 }}>
-              {error}
-            </Alert>
-          )}
         </DialogContent>
         <DialogActions>
           <Button onClick={handleCloseDialog}>Cancel</Button>
@@ -518,6 +619,15 @@ const Services: React.FC = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Hidden file input for CSV import */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        style={{ display: 'none' }}
+        accept=".csv"
+        onChange={handleFileChange}
+      />
     </Box>
   );
 };

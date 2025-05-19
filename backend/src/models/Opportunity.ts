@@ -35,6 +35,7 @@ export interface Opportunity {
   notes?: string;
   created_at: Date;
   updated_at: Date;
+  is_deleted?: boolean;
 }
 
 // Opportunity input interface for creation/updates
@@ -48,6 +49,7 @@ export interface OpportunityInput {
   estimated_value: number;
   due_date: Date;
   notes?: string;
+  is_deleted?: boolean;
 }
 
 class OpportunityModel {
@@ -128,7 +130,7 @@ class OpportunityModel {
    * Find an opportunity by ID
    */
   async findById(id: number): Promise<Opportunity | null> {
-    const query = 'SELECT * FROM opportunities WHERE id = $1';
+    const query = 'SELECT * FROM opportunities WHERE id = $1 AND (is_deleted = FALSE OR is_deleted IS NULL)';
     
     try {
       const result = await this.pool.query(query, [id]);
@@ -143,7 +145,7 @@ class OpportunityModel {
    * Find opportunities by client
    */
   async findByClient(clientId: number): Promise<Opportunity[]> {
-    const query = 'SELECT * FROM opportunities WHERE client_id = $1 ORDER BY due_date';
+    const query = 'SELECT * FROM opportunities WHERE client_id = $1 AND (is_deleted = FALSE OR is_deleted IS NULL) ORDER BY due_date';
     
     try {
       const result = await this.pool.query(query, [clientId]);
@@ -158,7 +160,7 @@ class OpportunityModel {
    * Find opportunities by service
    */
   async findByService(serviceId: number): Promise<Opportunity[]> {
-    const query = 'SELECT * FROM opportunities WHERE service_id = $1 ORDER BY due_date';
+    const query = 'SELECT * FROM opportunities WHERE service_id = $1 AND (is_deleted = FALSE OR is_deleted IS NULL) ORDER BY due_date';
     
     try {
       const result = await this.pool.query(query, [serviceId]);
@@ -173,7 +175,7 @@ class OpportunityModel {
    * Find opportunities by assigned user
    */
   async findByAssignedUser(userId: number): Promise<Opportunity[]> {
-    const query = 'SELECT * FROM opportunities WHERE assigned_user_id = $1 ORDER BY due_date';
+    const query = 'SELECT * FROM opportunities WHERE assigned_user_id = $1 AND (is_deleted = FALSE OR is_deleted IS NULL) ORDER BY due_date';
     
     try {
       const result = await this.pool.query(query, [userId]);
@@ -188,7 +190,7 @@ class OpportunityModel {
    * Find opportunities by status
    */
   async findByStatus(status: OpportunityStatus): Promise<Opportunity[]> {
-    const query = 'SELECT * FROM opportunities WHERE status = $1 ORDER BY due_date';
+    const query = 'SELECT * FROM opportunities WHERE status = $1 AND (is_deleted = FALSE OR is_deleted IS NULL) ORDER BY due_date';
     
     try {
       const result = await this.pool.query(query, [status]);
@@ -203,7 +205,7 @@ class OpportunityModel {
    * Find opportunities by priority
    */
   async findByPriority(priority: OpportunityPriority): Promise<Opportunity[]> {
-    const query = 'SELECT * FROM opportunities WHERE priority = $1 ORDER BY due_date';
+    const query = 'SELECT * FROM opportunities WHERE priority = $1 AND (is_deleted = FALSE OR is_deleted IS NULL) ORDER BY due_date';
     
     try {
       const result = await this.pool.query(query, [priority]);
@@ -218,7 +220,7 @@ class OpportunityModel {
    * Find opportunities due by a certain date
    */
   async findDueBy(date: Date): Promise<Opportunity[]> {
-    const query = 'SELECT * FROM opportunities WHERE due_date <= $1 ORDER BY due_date';
+    const query = 'SELECT * FROM opportunities WHERE due_date <= $1 AND (is_deleted = FALSE OR is_deleted IS NULL) ORDER BY due_date';
     
     try {
       const result = await this.pool.query(query, [date]);
@@ -233,7 +235,7 @@ class OpportunityModel {
    * Get all opportunities
    */
   async findAll(): Promise<Opportunity[]> {
-    const query = 'SELECT * FROM opportunities ORDER BY due_date';
+    const query = 'SELECT * FROM opportunities WHERE (is_deleted = FALSE OR is_deleted IS NULL) ORDER BY due_date';
     
     try {
       const result = await this.pool.query(query);
@@ -251,6 +253,7 @@ class OpportunityModel {
     const query = `
       SELECT * FROM opportunities 
       WHERE status NOT IN ($1, $2, $3) 
+      AND (is_deleted = FALSE OR is_deleted IS NULL)
       ORDER BY due_date
     `;
     

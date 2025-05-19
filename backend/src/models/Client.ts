@@ -24,6 +24,7 @@ export interface Client {
   status: ClientStatus;
   created_at: Date;
   updated_at: Date;
+  is_deleted?: boolean;
 }
 
 // Client input interface for creation/updates
@@ -39,6 +40,7 @@ export interface ClientInput {
   crm_link?: string;
   notes?: string;
   status: ClientStatus;
+  is_deleted?: boolean;
 }
 
 class ClientModel {
@@ -121,7 +123,7 @@ class ClientModel {
    * Find a client by ID
    */
   async findById(id: number): Promise<Client | null> {
-    const query = 'SELECT * FROM clients WHERE id = $1';
+    const query = 'SELECT * FROM clients WHERE id = $1 AND (is_deleted = FALSE OR is_deleted IS NULL)';
     
     try {
       const result = await this.pool.query(query, [id]);
@@ -136,7 +138,7 @@ class ClientModel {
    * Find clients by account owner ID
    */
   async findByAccountOwner(accountOwnerId: number): Promise<Client[]> {
-    const query = 'SELECT * FROM clients WHERE account_owner_id = $1 ORDER BY name';
+    const query = 'SELECT * FROM clients WHERE account_owner_id = $1 AND (is_deleted = FALSE OR is_deleted IS NULL) ORDER BY name';
     
     try {
       const result = await this.pool.query(query, [accountOwnerId]);
@@ -151,7 +153,7 @@ class ClientModel {
    * Find clients by industry
    */
   async findByIndustry(industry: string): Promise<Client[]> {
-    const query = 'SELECT * FROM clients WHERE industry = $1 ORDER BY name';
+    const query = 'SELECT * FROM clients WHERE industry = $1 AND (is_deleted = FALSE OR is_deleted IS NULL) ORDER BY name';
     
     try {
       const result = await this.pool.query(query, [industry]);
@@ -166,7 +168,7 @@ class ClientModel {
    * Find clients using a specific service
    */
   async findByService(serviceId: number): Promise<Client[]> {
-    const query = 'SELECT * FROM clients WHERE $1 = ANY(services_used) ORDER BY name';
+    const query = 'SELECT * FROM clients WHERE $1 = ANY(services_used) AND (is_deleted = FALSE OR is_deleted IS NULL) ORDER BY name';
     
     try {
       const result = await this.pool.query(query, [serviceId]);
@@ -181,7 +183,7 @@ class ClientModel {
    * Get all clients
    */
   async findAll(): Promise<Client[]> {
-    const query = 'SELECT * FROM clients ORDER BY name';
+    const query = 'SELECT * FROM clients WHERE is_deleted = FALSE OR is_deleted IS NULL ORDER BY name';
     
     try {
       const result = await this.pool.query(query);
@@ -196,7 +198,7 @@ class ClientModel {
    * Get active clients
    */
   async findActive(): Promise<Client[]> {
-    const query = 'SELECT * FROM clients WHERE status = $1 ORDER BY name';
+    const query = 'SELECT * FROM clients WHERE status = $1 AND (is_deleted = FALSE OR is_deleted IS NULL) ORDER BY name';
     
     try {
       const result = await this.pool.query(query, [ClientStatus.ACTIVE]);
@@ -256,13 +258,13 @@ class ClientModel {
    * Delete a client
    */
   async delete(id: number): Promise<boolean> {
-    const query = 'DELETE FROM clients WHERE id = $1 RETURNING id';
+    const query = 'UPDATE clients SET is_deleted = TRUE, updated_at = CURRENT_TIMESTAMP WHERE id = $1 RETURNING id';
     
     try {
       const result = await this.pool.query(query, [id]);
       return result.rowCount !== null && result.rowCount > 0;
     } catch (error) {
-      console.error('Error deleting client:', error);
+      console.error('Error soft deleting client:', error);
       throw error;
     }
   }

@@ -21,6 +21,7 @@ export interface Service {
   status: ServiceStatus;
   created_at: Date;
   updated_at: Date;
+  is_deleted?: boolean;
 }
 
 // Service input interface for creation/updates
@@ -33,6 +34,7 @@ export interface ServiceInput {
   applicable_industries: string[];
   client_role: string;
   status: ServiceStatus;
+  is_deleted?: boolean;
 }
 
 class ServiceModel {
@@ -108,7 +110,7 @@ class ServiceModel {
    * Find a service by ID
    */
   async findById(id: number): Promise<Service | null> {
-    const query = 'SELECT * FROM services WHERE id = $1';
+    const query = 'SELECT * FROM services WHERE id = $1 AND (is_deleted = FALSE OR is_deleted IS NULL)';
     
     try {
       const result = await this.pool.query(query, [id]);
@@ -123,7 +125,7 @@ class ServiceModel {
    * Find services by business unit
    */
   async findByBusinessUnit(businessUnit: string): Promise<Service[]> {
-    const query = 'SELECT * FROM services WHERE business_unit = $1';
+    const query = 'SELECT * FROM services WHERE business_unit = $1 AND (is_deleted = FALSE OR is_deleted IS NULL)';
     
     try {
       const result = await this.pool.query(query, [businessUnit]);
@@ -138,7 +140,7 @@ class ServiceModel {
    * Find services by applicable industry
    */
   async findByIndustry(industry: string): Promise<Service[]> {
-    const query = 'SELECT * FROM services WHERE $1 = ANY(applicable_industries)';
+    const query = 'SELECT * FROM services WHERE $1 = ANY(applicable_industries) AND (is_deleted = FALSE OR is_deleted IS NULL)';
     
     try {
       const result = await this.pool.query(query, [industry]);
@@ -153,7 +155,7 @@ class ServiceModel {
    * Get all services
    */
   async findAll(): Promise<Service[]> {
-    const query = 'SELECT * FROM services ORDER BY name';
+    const query = 'SELECT * FROM services WHERE (is_deleted = FALSE OR is_deleted IS NULL) ORDER BY name';
     
     try {
       const result = await this.pool.query(query);
@@ -168,7 +170,7 @@ class ServiceModel {
    * Get active services
    */
   async findActive(): Promise<Service[]> {
-    const query = 'SELECT * FROM services WHERE status = $1 ORDER BY name';
+    const query = 'SELECT * FROM services WHERE status = $1 AND (is_deleted = FALSE OR is_deleted IS NULL) ORDER BY name';
     
     try {
       const result = await this.pool.query(query, [ServiceStatus.ACTIVE]);
@@ -228,7 +230,13 @@ class ServiceModel {
    * Delete a service
    */
   async delete(id: number): Promise<boolean> {
-    const query = 'DELETE FROM services WHERE id = $1 RETURNING id';
+    // Use soft delete by setting is_deleted to TRUE
+    const query = `
+      UPDATE services
+      SET is_deleted = TRUE, updated_at = CURRENT_TIMESTAMP
+      WHERE id = $1
+      RETURNING id
+    `;
     
     try {
       const result = await this.pool.query(query, [id]);

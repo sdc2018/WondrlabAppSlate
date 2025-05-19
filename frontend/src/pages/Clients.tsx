@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Box, 
   Button,
@@ -31,11 +31,16 @@ import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import BusinessIcon from '@mui/icons-material/Business';
+import FileUploadIcon from '@mui/icons-material/FileUpload';
+import FileDownloadIcon from '@mui/icons-material/FileDownload';
 
 // Import services
 import userService from '../services/userService';
 import clientService, { Client, ClientInput } from '../services/clientService';
 import serviceService, { Service } from '../services/serviceService';
+
+// Import CSV utilities
+import { exportToCSV, parseCSVFile, validateCSVData } from '../utils/csvUtils';
 
 // Industries for dropdown
 const industries = [
@@ -76,6 +81,98 @@ const Clients: React.FC = () => {
   });
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  // Reference for CSV file input
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Handler for CSV import button click
+  const handleImportClick = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  };
+
+  // Handler for CSV file selection
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (!event.target.files || event.target.files.length === 0) {
+      return;
+    }
+    
+    const file = event.target.files[0];
+    
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const parsedData = await parseCSVFile(file);
+      
+      // Validate the CSV data - only name is mandatory
+      const requiredFields = ['name'];
+      const validationResult = validateCSVData(parsedData, requiredFields);
+      
+      if (!validationResult.valid) {
+        setError(`Invalid CSV format: ${validationResult.errors.join(', ')}`);
+        return;
+      }
+      
+      // Process and convert data types
+      const processedData = parsedData.map(item => ({
+        ...item,
+        account_owner_id: parseInt(item.account_owner_id as string, 10),
+        services_used: item.services_used ? 
+          (typeof item.services_used === 'string' ? 
+            item.services_used.split(';').map((id: string) => parseInt(id.trim(), 10)) : 
+            item.services_used) : 
+          []
+      }));
+      
+      // Create clients from CSV data
+      for (const clientData of processedData) {
+        await clientService.createClient(clientData as ClientInput);
+      }
+      
+      // Refresh client list
+      const updatedClients = await clientService.getAllClients();
+      setClients(updatedClients);
+      
+      // Reset file input
+      if (event.target.value) {
+        event.target.value = '';
+      }
+      
+    } catch (err) {
+      console.error('Error importing clients:', err);
+      setError('Failed to import clients. Please check your CSV file format.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Handler for CSV export
+  const handleExportClick = () => {
+    try {
+      // Prepare data for export
+      const dataToExport = clients.map(client => ({
+        id: client.id,
+        name: client.name,
+        industry: client.industry,
+        contact_name: client.contact_name,
+        contact_email: client.contact_email,
+        contact_phone: client.contact_phone,
+        address: client.address || '',
+        account_owner_id: client.account_owner_id,
+        services_used: client.services_used.join(';'),
+        crm_link: client.crm_link || '',
+        notes: client.notes || '',
+        status: client.status
+      }));
+      
+      exportToCSV(dataToExport, 'clients_export.csv');
+    } catch (err) {
+      console.error('Error exporting clients:', err);
+      setError('Failed to export clients.');
+    }
+  };
 
   useEffect(() => {
     // Fetch clients, services, and account owners when component mounts
@@ -342,6 +439,23 @@ const Clients: React.FC = () => {
     <Box>
       <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 3 }}>
         <Typography variant="h4">Clients</Typography>
+        <Box sx={{ display: 'flex' }}>
+          <Button 
+            variant="outlined" 
+            startIcon={<FileUploadIcon />}
+            onClick={handleImportClick}
+            sx={{ mr: 1 }}
+          >
+            Import CSV
+          </Button>
+          <Button 
+            variant="outlined" 
+            startIcon={<FileDownloadIcon />}
+            onClick={handleExportClick}
+            sx={{ mr: 1 }}
+          >
+            Export CSV
+          </Button>
         <Button 
           variant="contained" 
           startIcon={<AddIcon />}
@@ -349,6 +463,7 @@ const Clients: React.FC = () => {
         >
           Add Client
         </Button>
+        </Box>
       </Stack>
 
       {error && (
@@ -573,6 +688,15 @@ const Clients: React.FC = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Hidden file input for CSV import */}
+      <input
+        type="file"
+        accept=".csv"
+        ref={fileInputRef}
+        style={{ display: 'none' }}
+        onChange={handleFileChange}
+      />
     </Box>
   );
 };

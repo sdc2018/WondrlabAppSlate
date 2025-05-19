@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Box, 
   Typography, 
@@ -30,6 +30,8 @@ import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
+import FileUploadIcon from '@mui/icons-material/FileUpload';
+import FileDownloadIcon from '@mui/icons-material/FileDownload';
 
 // Import services
 import opportunityService, { Opportunity, OpportunityInput } from '../services/opportunityService';
@@ -37,6 +39,7 @@ import clientService, { Client } from '../services/clientService';
 import serviceService, { Service } from '../services/serviceService';
 import userService from '../services/userService';
 import { User } from '../services/authService';
+import { exportToCSV, parseCSVFile, validateCSVData } from '../utils/csvUtils';
 
 // Status options
 const statusOptions = [
@@ -67,6 +70,9 @@ interface OpportunityWithDetails extends Opportunity {
 }
 
 const Opportunities: React.FC = () => {
+  // File input reference for CSV import
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  
   // State for opportunities
   const [opportunities, setOpportunities] = useState<OpportunityWithDetails[]>([]);
   const [loading, setLoading] = useState(true);
@@ -472,6 +478,93 @@ const Opportunities: React.FC = () => {
     }).format(date);
   };
 
+  // Handle import button click
+  const handleImportClick = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  };
+
+  // Handle file selection for CSV import
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (!event.target.files || event.target.files.length === 0) return;
+    
+    const file = event.target.files[0];
+    try {
+      setLoading(true);
+      
+      // Parse CSV file
+      const parsedData = await parseCSVFile(file);
+      
+      // Validate required fields - only name is mandatory
+      const requiredFields = ['name'];
+      const validationResult = validateCSVData(parsedData, requiredFields);
+      
+      if (!validationResult.valid) {
+        setError(`CSV validation failed: ${validationResult.errors.join(', ')}`);
+        return;
+      }
+      
+      // Process and create opportunities
+      for (const item of parsedData) {
+        const opportunityData: OpportunityInput = {
+          name: item.name as string,
+          client_id: parseInt(item.client_id as string, 10),
+          service_id: parseInt(item.service_id as string, 10),
+          assigned_user_id: parseInt(item.assigned_user_id as string, 10),
+          status: item.status as string,
+          priority: (item.priority as string) || 'medium',
+          estimated_value: item.estimated_value ? parseFloat(item.estimated_value as string) : 0,
+          due_date: (item.due_date as string) || '',
+          notes: (item.notes as string) || ''
+        };
+        
+        await opportunityService.createOpportunity(opportunityData);
+      }
+      
+      // Refresh opportunities list
+      await fetchOpportunities();
+      setError(null);
+    } catch (err) {
+      console.error('Error importing opportunities:', err);
+      setError('Failed to import opportunities. Please check the CSV format and try again.');
+    } finally {
+      setLoading(false);
+      // Reset file input
+      if (event.target.value) event.target.value = '';
+    }
+  };
+
+  // Handle export button click
+  const handleExportClick = () => {
+    try {
+      // Prepare data for export
+      const exportData = opportunities.map(opportunity => ({
+        id: opportunity.id,
+        name: opportunity.name,
+        client_id: opportunity.client_id,
+        client_name: opportunity.client_name,
+        service_id: opportunity.service_id,
+        service_name: opportunity.service_name,
+        assigned_user_id: opportunity.assigned_user_id,
+        assigned_user_name: opportunity.assigned_user_name,
+        status: opportunity.status,
+        priority: opportunity.priority,
+        estimated_value: opportunity.estimated_value,
+        due_date: opportunity.due_date,
+        notes: opportunity.notes,
+        created_at: opportunity.created_at,
+        updated_at: opportunity.updated_at
+      }));
+      
+      // Export to CSV
+      exportToCSV(exportData, 'opportunities.csv');
+    } catch (err) {
+      console.error('Error exporting opportunities:', err);
+      setError('Failed to export opportunities. Please try again.');
+    }
+  };
+
   if (loading && opportunities.length === 0) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '50vh' }}>
@@ -484,6 +577,21 @@ const Opportunities: React.FC = () => {
     <Box>
       <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 3 }}>
         <Typography variant="h4">Opportunities</Typography>
+        <Box sx={{ display: 'flex', gap: 2 }}>
+          <Button 
+            variant="outlined" 
+            startIcon={<FileUploadIcon />}
+            onClick={handleImportClick}
+          >
+            Import CSV
+          </Button>
+          <Button 
+            variant="outlined" 
+            startIcon={<FileDownloadIcon />}
+            onClick={handleExportClick}
+          >
+            Export CSV
+          </Button>
         <Button 
           variant="contained" 
           startIcon={<AddIcon />}
@@ -491,7 +599,17 @@ const Opportunities: React.FC = () => {
         >
           Add Opportunity
         </Button>
+        </Box>
       </Stack>
+
+      {/* Hidden file input for CSV import */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        accept=".csv"
+        style={{ display: 'none' }}
+        onChange={handleFileChange}
+      />
 
       {error && (
         <Alert severity="error" sx={{ mb: 2 }}>
