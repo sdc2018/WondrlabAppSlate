@@ -125,13 +125,19 @@ const clientService = {
 
   /**
    * Delete client
+   * @param id The client ID to delete
+   * @param force Whether to force delete the client and its opportunities
+   * @returns A promise that resolves to an object with success status and message
    */
-  deleteClient: async (id: number): Promise<boolean> => {
+  deleteClient: async (id: number, force: boolean = false): Promise<any> => {
     try {
-      const response = await api.delete(`/clients/${id}`);
-      // Extract success status from the response data structure
-      return response.data.success || false;
-    } catch (error) {
+      const response = await api.delete(`/clients/${id}?force=${force}`);
+      return response.data;
+    } catch (error: any) {
+      // If the error is a 409 Conflict (client has opportunities), return the response data
+      if (error.response && error.response.status === 409) {
+        return error.response.data;
+      }
       console.error(`Error deleting client with ID ${id}:`, error);
       throw error;
     }

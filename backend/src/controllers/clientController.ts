@@ -217,13 +217,15 @@ class ClientController {
   }
 
   /**
-   * Delete a client
+   * Delete client
    * @route DELETE /api/clients/:id
-   * @access Private (Admin only)
+   * @access Private (Admin)
    */
   async deleteClient(req: Request, res: Response): Promise<void> {
     try {
       const id = parseInt(req.params.id);
+      const { force } = req.query;
+      const forceDelete = force === 'true';
       
       if (isNaN(id)) {
         res.status(400).json({ message: 'Invalid client ID' });
@@ -238,6 +240,27 @@ class ClientController {
         return;
       }
       
+      // Check for related opportunities
+      const opportunityModel = (await import('../models/Opportunity')).default;
+      const relatedOpportunities = await opportunityModel.findByClient(id);
+      
+      // If there are related opportunities and not forcing delete, return a warning
+      if (relatedOpportunities.length > 0 && !forceDelete) {
+        res.status(409).json({
+          success: false,
+          message: 'Client has related opportunities',
+          hasOpportunities: true,
+          opportunityCount: relatedOpportunities.length
+        });
+        return;
+      }
+      
+      // If force delete is true and there are opportunities, delete them first
+      if (forceDelete && relatedOpportunities.length > 0) {
+        // Use the bulk delete method for better performance
+        await opportunityModel.deleteByClientId(id);
+      }
+      
       // Delete the client
       const deleted = await ClientModel.delete(id);
       
@@ -248,7 +271,9 @@ class ClientController {
       
       res.status(200).json({
         success: true,
-        message: 'Client deleted successfully'
+        message: forceDelete && relatedOpportunities.length > 0 
+          ? `Client and ${relatedOpportunities.length} related opportunities deleted successfully`
+          : 'Client deleted successfully'
       });
     } catch (error) {
       console.error('Error deleting client:', error);

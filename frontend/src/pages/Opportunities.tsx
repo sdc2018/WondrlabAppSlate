@@ -32,6 +32,10 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
 import FileUploadIcon from '@mui/icons-material/FileUpload';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
+import SearchIcon from '@mui/icons-material/Search';
+import SortIcon from '@mui/icons-material/Sort';
+import InputAdornment from '@mui/material/InputAdornment';
+import TableSortLabel from '@mui/material/TableSortLabel';
 
 // Import services
 import opportunityService, { Opportunity, OpportunityInput } from '../services/opportunityService';
@@ -69,6 +73,18 @@ interface OpportunityWithDetails extends Opportunity {
   assigned_user_name?: string;
 }
 
+// Type for sort direction
+type SortDirection = 'asc' | 'desc';
+
+// Type for sort field
+type SortField = 'name' | 'client_name' | 'service_name' | 'status' | 'priority' | 'estimated_value' | 'due_date' | 'assigned_user_name';
+
+// Interface for sort configuration
+interface SortConfig {
+  field: SortField;
+  direction: SortDirection;
+}
+
 const Opportunities: React.FC = () => {
   // File input reference for CSV import
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -82,6 +98,13 @@ const Opportunities: React.FC = () => {
   const [clients, setClients] = useState<Client[]>([]);
   const [services, setServices] = useState<Service[]>([]);
   const [users, setUsers] = useState<User[]>([]);
+  
+  // Search and sort state
+  const [searchTerm, setSearchTerm] = useState('');
+  const [sortConfig, setSortConfig] = useState<SortConfig>({
+    field: 'name',
+    direction: 'asc'
+  });
   
   // Dialog state
   const [openDialog, setOpenDialog] = useState(false);
@@ -105,6 +128,58 @@ const Opportunities: React.FC = () => {
     fetchServices();
     fetchUsers();
   }, []);
+
+  // Handle sorting
+  const handleSort = (field: SortField) => {
+    setSortConfig(prevConfig => ({
+      field,
+      direction: prevConfig.field === field && prevConfig.direction === 'asc' ? 'desc' : 'asc'
+    }));
+  };
+
+  // Filter and sort opportunities
+  const filteredAndSortedOpportunities = React.useMemo(() => {
+    // First filter by search term
+    const filtered = opportunities.filter(opportunity => {
+      const searchLower = searchTerm.toLowerCase();
+      return (
+        opportunity.name.toLowerCase().includes(searchLower) ||
+        (opportunity.client_name || '').toLowerCase().includes(searchLower) ||
+        (opportunity.service_name || '').toLowerCase().includes(searchLower) ||
+        (opportunity.service_business_unit || '').toLowerCase().includes(searchLower) ||
+        (opportunity.assigned_user_name || '').toLowerCase().includes(searchLower) ||
+        opportunity.status.toLowerCase().includes(searchLower) ||
+        opportunity.priority.toLowerCase().includes(searchLower) ||
+        (opportunity.notes || '').toLowerCase().includes(searchLower)
+      );
+    });
+
+    // Then sort
+    return [...filtered].sort((a, b) => {
+      const direction = sortConfig.direction === 'asc' ? 1 : -1;
+      
+      switch (sortConfig.field) {
+        case 'name':
+          return direction * a.name.localeCompare(b.name);
+        case 'client_name':
+          return direction * ((a.client_name || '').localeCompare(b.client_name || ''));
+        case 'service_name':
+          return direction * ((a.service_name || '').localeCompare(b.service_name || ''));
+        case 'status':
+          return direction * a.status.localeCompare(b.status);
+        case 'priority':
+          return direction * a.priority.localeCompare(b.priority);
+        case 'estimated_value':
+          return direction * (a.estimated_value - b.estimated_value);
+        case 'due_date':
+          return direction * (new Date(a.due_date).getTime() - new Date(b.due_date).getTime());
+        case 'assigned_user_name':
+          return direction * ((a.assigned_user_name || '').localeCompare(b.assigned_user_name || ''));
+        default:
+          return 0;
+      }
+    });
+  }, [opportunities, searchTerm, sortConfig]);
 
   // Fetch opportunities from API
   const fetchOpportunities = async () => {
@@ -602,6 +677,24 @@ const Opportunities: React.FC = () => {
         </Box>
       </Stack>
 
+      {/* Search field */}
+      <Box mb={2}>
+        <TextField
+          fullWidth
+          variant="outlined"
+          placeholder="Search opportunities by name, client, service, status, etc."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <SearchIcon />
+              </InputAdornment>
+            ),
+          }}
+        />
+      </Box>
+
       {/* Hidden file input for CSV import */}
       <input
         type="file"
@@ -621,14 +714,78 @@ const Opportunities: React.FC = () => {
         <Table>
           <TableHead>
             <TableRow>
-              <TableCell>Name</TableCell>
-              <TableCell>Client</TableCell>
-              <TableCell>Service</TableCell>
-              <TableCell>Assigned To</TableCell>
-              <TableCell>Status</TableCell>
-              <TableCell>Priority</TableCell>
-              <TableCell>Value</TableCell>
-              <TableCell>Due Date</TableCell>
+              <TableCell>
+                <TableSortLabel
+                  active={sortConfig.field === 'name'}
+                  direction={sortConfig.direction}
+                  onClick={() => handleSort('name')}
+                >
+                  Name
+                </TableSortLabel>
+              </TableCell>
+              <TableCell>
+                <TableSortLabel
+                  active={sortConfig.field === 'client_name'}
+                  direction={sortConfig.direction}
+                  onClick={() => handleSort('client_name')}
+                >
+                  Client
+                </TableSortLabel>
+              </TableCell>
+              <TableCell>
+                <TableSortLabel
+                  active={sortConfig.field === 'service_name'}
+                  direction={sortConfig.direction}
+                  onClick={() => handleSort('service_name')}
+                >
+                  Service
+                </TableSortLabel>
+              </TableCell>
+              <TableCell>
+                <TableSortLabel
+                  active={sortConfig.field === 'assigned_user_name'}
+                  direction={sortConfig.direction}
+                  onClick={() => handleSort('assigned_user_name')}
+                >
+                  Assigned To
+                </TableSortLabel>
+              </TableCell>
+              <TableCell>
+                <TableSortLabel
+                  active={sortConfig.field === 'status'}
+                  direction={sortConfig.direction}
+                  onClick={() => handleSort('status')}
+                >
+                  Status
+                </TableSortLabel>
+              </TableCell>
+              <TableCell>
+                <TableSortLabel
+                  active={sortConfig.field === 'priority'}
+                  direction={sortConfig.direction}
+                  onClick={() => handleSort('priority')}
+                >
+                  Priority
+                </TableSortLabel>
+              </TableCell>
+              <TableCell>
+                <TableSortLabel
+                  active={sortConfig.field === 'estimated_value'}
+                  direction={sortConfig.direction}
+                  onClick={() => handleSort('estimated_value')}
+                >
+                  Value
+                </TableSortLabel>
+              </TableCell>
+              <TableCell>
+                <TableSortLabel
+                  active={sortConfig.field === 'due_date'}
+                  direction={sortConfig.direction}
+                  onClick={() => handleSort('due_date')}
+                >
+                  Due Date
+                </TableSortLabel>
+              </TableCell>
               <TableCell align="right">Actions</TableCell>
             </TableRow>
           </TableHead>
@@ -639,8 +796,14 @@ const Opportunities: React.FC = () => {
                   No opportunities found. Create your first opportunity by clicking "Add Opportunity".
                 </TableCell>
               </TableRow>
+            ) : filteredAndSortedOpportunities.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={9} align="center">
+                  No opportunities match your search criteria.
+                </TableCell>
+              </TableRow>
             ) : (
-              opportunities.map((opportunity) => (
+              filteredAndSortedOpportunities.map((opportunity) => (
                 <TableRow key={opportunity.id}>
                   <TableCell>{opportunity.name}</TableCell>
                   <TableCell>{opportunity.client_name}</TableCell>

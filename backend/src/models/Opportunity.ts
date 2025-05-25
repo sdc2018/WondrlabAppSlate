@@ -77,6 +77,7 @@ class OpportunityModel {
         notes TEXT,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        is_deleted BOOLEAN DEFAULT FALSE,
         FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE RESTRICT,
         FOREIGN KEY (service_id) REFERENCES services(id) ON DELETE RESTRICT,
         FOREIGN KEY (assigned_user_id) REFERENCES users(id) ON DELETE RESTRICT
@@ -316,16 +317,41 @@ class OpportunityModel {
   }
 
   /**
-   * Delete an opportunity
+   * Soft delete an opportunity by its ID
    */
   async delete(id: number): Promise<boolean> {
-    const query = 'DELETE FROM opportunities WHERE id = $1 RETURNING id';
+    const query = `
+      UPDATE opportunities
+      SET is_deleted = TRUE, updated_at = CURRENT_TIMESTAMP
+      WHERE id = $1 AND (is_deleted = FALSE OR is_deleted IS NULL)
+      RETURNING id
+    `;
     
     try {
       const result = await this.pool.query(query, [id]);
       return result.rowCount !== null && result.rowCount > 0;
     } catch (error) {
-      console.error('Error deleting opportunity:', error);
+      console.error('Error soft deleting opportunity:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Soft delete all opportunities for a client
+   */
+  async deleteByClientId(clientId: number): Promise<number> {
+    const query = `
+      UPDATE opportunities
+      SET is_deleted = TRUE, updated_at = CURRENT_TIMESTAMP
+      WHERE client_id = $1 AND (is_deleted = FALSE OR is_deleted IS NULL)
+      RETURNING id
+    `;
+    
+    try {
+      const result = await this.pool.query(query, [clientId]);
+      return result.rowCount || 0;
+    } catch (error) {
+      console.error('Error soft deleting opportunities by client:', error);
       throw error;
     }
   }

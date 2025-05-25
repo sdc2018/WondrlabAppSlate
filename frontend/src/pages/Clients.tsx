@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   Box, 
   Button,
@@ -14,6 +14,7 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  TableSortLabel,
   Paper,
   FormControl,
   InputLabel,
@@ -24,7 +25,8 @@ import {
   IconButton,
   CircularProgress,
   Alert,
-  Autocomplete
+  Autocomplete,
+  InputAdornment
 } from '@mui/material';
 import { SelectChangeEvent } from '@mui/material/Select';
 import AddIcon from '@mui/icons-material/Add';
@@ -33,6 +35,8 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import BusinessIcon from '@mui/icons-material/Business';
 import FileUploadIcon from '@mui/icons-material/FileUpload';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
+import SearchIcon from '@mui/icons-material/Search';
+import SortIcon from '@mui/icons-material/Sort';
 
 // Import services
 import userService from '../services/userService';
@@ -57,6 +61,18 @@ const industries = [
 // Status options
 const statusOptions = ['active', 'inactive', 'prospect'];
 
+// Type for sort direction
+type SortDirection = 'asc' | 'desc';
+
+// Type for sort field
+type SortField = 'name' | 'industry' | 'account_owner_id' | 'services_used';
+
+// Interface for sort configuration
+interface SortConfig {
+  field: SortField;
+  direction: SortDirection;
+}
+
 const Clients: React.FC = () => {
   const [clients, setClients] = useState<Client[]>([]);
   const [services, setServices] = useState<Service[]>([]);
@@ -66,6 +82,8 @@ const Clients: React.FC = () => {
   const [loadingAccountOwners, setLoadingAccountOwners] = useState(true);
   const [openDialog, setOpenDialog] = useState(false);
   const [currentClient, setCurrentClient] = useState<Client | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [sortConfig, setSortConfig] = useState<SortConfig>({ field: 'name', direction: 'asc' });
   const [formData, setFormData] = useState({
     name: '',
     industry: '',
@@ -390,11 +408,36 @@ const Clients: React.FC = () => {
     }
     
     try {
-      await clientService.deleteClient(id);
+      // First attempt to delete without force
+      const result = await clientService.deleteClient(id, false);
       
+      // If client has opportunities, ask for confirmation to delete both
+      if (!result.success && result.hasOpportunities) {
+        const confirmForceDelete = window.confirm(
+          `This client has ${result.opportunityCount} related opportunities. ` +
+          'Deleting this client will also delete all associated opportunities. ' +
+          'Do you want to continue?'
+        );
+        
+        if (confirmForceDelete) {
+          // Delete with force=true if user confirmed
+          const forceResult = await clientService.deleteClient(id, true);
+          if (forceResult.success) {
       // Update local state
       setClients(clients.filter(c => c.id !== id));
       setError(null);
+          } else {
+            setError('Failed to delete client and its opportunities. Please try again.');
+          }
+        }
+      } else if (result.success) {
+        // Update local state if delete was successful
+        setClients(clients.filter(c => c.id !== id));
+        setError(null);
+      } else {
+        // Handle other error cases
+        setError(result.message || 'Failed to delete client. Please try again.');
+      }
     } catch (err) {
       console.error('Error deleting client:', err);
       setError('Failed to delete client. Please try again.');
@@ -425,6 +468,67 @@ const Clients: React.FC = () => {
     return services
       .filter(service => serviceIds.includes(service.id))
       .map(service => service.name);
+  };
+
+  // Filter and sort clients based on search term and sort configuration
+  const filteredAndSortedClients = useMemo(() => {
+    // First, filter clients based on search term
+    const filtered = clients.filter(client => {
+      if (!searchTerm) return true;
+      
+      const searchLower = searchTerm.toLowerCase();
+      
+      // Search in multiple fields
+      return (
+        client.name.toLowerCase().includes(searchLower) ||
+        client.industry.toLowerCase().includes(searchLower) ||
+        client.contact_name?.toLowerCase().includes(searchLower) ||
+        client.contact_email?.toLowerCase().includes(searchLower) ||
+        getAccountOwnerName(client.account_owner_id).toLowerCase().includes(searchLower) ||
+        getServiceNames(client.services_used).some(service => 
+          service.toLowerCase().includes(searchLower)
+        )
+      );
+    });
+    
+    // Then, sort the filtered clients
+    return [...filtered].sort((a, b) => {
+      const { field, direction } = sortConfig;
+      let comparison = 0;
+      
+      switch (field) {
+        case 'name':
+          comparison = a.name.localeCompare(b.name);
+          break;
+        case 'industry':
+          comparison = a.industry.localeCompare(b.industry);
+          break;
+        case 'account_owner_id':
+          comparison = getAccountOwnerName(a.account_owner_id).localeCompare(
+            getAccountOwnerName(b.account_owner_id)
+          );
+          break;
+        case 'services_used':
+          // Compare by number of services used
+          comparison = a.services_used.length - b.services_used.length;
+          break;
+        default:
+          comparison = 0;
+      }
+      
+      return direction === 'asc' ? comparison : -comparison;
+    });
+  }, [clients, searchTerm, sortConfig, accountOwners, services]);
+  
+  // Handle sort request
+  const handleSort = (field: SortField) => {
+    setSortConfig(prevConfig => ({
+      field,
+      direction: 
+        prevConfig.field === field && prevConfig.direction === 'asc' 
+          ? 'desc' 
+          : 'asc'
+    }));
   };
 
   if (loading || loadingServices || loadingAccountOwners) {
@@ -466,6 +570,24 @@ const Clients: React.FC = () => {
         </Box>
       </Stack>
 
+      {/* Search Box */}
+      <Box sx={{ mb: 2 }}>
+        <TextField
+          fullWidth
+          variant="outlined"
+          placeholder="Search clients by name, industry, contact, account owner, or services..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <SearchIcon />
+              </InputAdornment>
+            ),
+          }}
+        />
+      </Box>
+
       {error && (
         <Alert severity="error" sx={{ mb: 2 }}>
           {error}
@@ -486,16 +608,48 @@ const Clients: React.FC = () => {
         <Table>
           <TableHead>
             <TableRow>
-              <TableCell>Name</TableCell>
-              <TableCell>Industry</TableCell>
-              <TableCell>Account Owner</TableCell>
-              <TableCell>Services Used</TableCell>
+              <TableCell>
+                <TableSortLabel
+                  active={sortConfig.field === 'name'}
+                  direction={sortConfig.field === 'name' ? sortConfig.direction : 'asc'}
+                  onClick={() => handleSort('name')}
+                >
+                  Name
+                </TableSortLabel>
+              </TableCell>
+              <TableCell>
+                <TableSortLabel
+                  active={sortConfig.field === 'industry'}
+                  direction={sortConfig.field === 'industry' ? sortConfig.direction : 'asc'}
+                  onClick={() => handleSort('industry')}
+                >
+                  Industry
+                </TableSortLabel>
+              </TableCell>
+              <TableCell>
+                <TableSortLabel
+                  active={sortConfig.field === 'account_owner_id'}
+                  direction={sortConfig.field === 'account_owner_id' ? sortConfig.direction : 'asc'}
+                  onClick={() => handleSort('account_owner_id')}
+                >
+                  Account Owner
+                </TableSortLabel>
+              </TableCell>
+              <TableCell>
+                <TableSortLabel
+                  active={sortConfig.field === 'services_used'}
+                  direction={sortConfig.field === 'services_used' ? sortConfig.direction : 'asc'}
+                  onClick={() => handleSort('services_used')}
+                >
+                  Services Used
+                </TableSortLabel>
+              </TableCell>
               <TableCell>Status</TableCell>
               <TableCell align="right">Actions</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
-            {clients.map((client) => (
+            {filteredAndSortedClients.map((client) => (
               <TableRow key={client.id}>
                 <TableCell>
                   <Stack direction="row" alignItems="center" spacing={1}>
