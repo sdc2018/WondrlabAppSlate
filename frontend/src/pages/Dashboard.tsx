@@ -12,7 +12,8 @@ import {
   ListItem,
   ListItemText,
   ListItemIcon,
-  CircularProgress
+  CircularProgress,
+  Alert
 } from '@mui/material';
 import BusinessIcon from '@mui/icons-material/Business';
 import CategoryIcon from '@mui/icons-material/Category';
@@ -22,46 +23,141 @@ import PriorityHighIcon from '@mui/icons-material/PriorityHigh';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import HourglassEmptyIcon from '@mui/icons-material/HourglassEmpty';
 
-// Mock data for dashboard - will be replaced with actual API calls
-const mockStats = {
-  clients: { total: 24, active: 18, new: 3 },
-  services: { total: 15, active: 12 },
-  opportunities: { total: 42, new: 8, inProgress: 15, won: 12, lost: 7 },
-  tasks: { total: 36, pending: 14, inProgress: 10, completed: 12, overdue: 5 }
-};
+// Import services
+import clientService, { Client } from '../services/clientService';
+import serviceService, { Service } from '../services/serviceService';
+import opportunityService, { Opportunity } from '../services/opportunityService';
+import taskService, { TaskStats, TaskWithDetails } from '../services/taskService';
 
-const mockRecentOpportunities = [
-  { id: 1, name: 'Website Redesign for ABC Corp', client: 'ABC Corporation', status: 'in_progress', value: 75000 },
-  { id: 2, name: 'Social Media Campaign', client: 'XYZ Industries', status: 'new', value: 45000 },
-  { id: 3, name: 'SEO Optimization', client: 'Global Tech', status: 'won', value: 30000 },
-  { id: 4, name: 'Mobile App Development', client: 'Innovate Solutions', status: 'in_progress', value: 120000 },
-];
+// Define types for dashboard stats
+interface DashboardStats {
+  clients: { total: number, active: number, new: number };
+  services: { total: number, active: number };
+  opportunities: { total: number, new: number, inProgress: number, won: number, lost: number };
+  tasks: { total: number, pending: number, inProgress: number, completed: number, overdue: number };
+}
 
-const mockOverdueTasks = [
-  { id: 1, name: 'Follow up with client', opportunity: 'Website Redesign for ABC Corp', dueDate: '2023-04-15' },
-  { id: 2, name: 'Send proposal', opportunity: 'Mobile App Development', dueDate: '2023-04-18' },
-  { id: 3, name: 'Schedule kickoff meeting', opportunity: 'Social Media Campaign', dueDate: '2023-04-20' },
-];
+// Define types for recent opportunities with client name
+interface RecentOpportunityWithClient {
+  id: number;
+  name: string;
+  client: string;
+  status: string;
+  value: number;
+}
 
 const Dashboard: React.FC = () => {
+  // State variables for loading and error states
   const [loading, setLoading] = useState(true);
-  // Using the mock data directly to avoid unused setter warnings
-  const stats = mockStats;
-  const recentOpportunities = mockRecentOpportunities;
-  const overdueTasks = mockOverdueTasks;
+  const [error, setError] = useState<string | null>(null);
+  
+  // State variables for dashboard data
+  const [stats, setStats] = useState<DashboardStats>({
+    clients: { total: 0, active: 0, new: 0 },
+    services: { total: 0, active: 0 },
+    opportunities: { total: 0, new: 0, inProgress: 0, won: 0, lost: 0 },
+    tasks: { total: 0, pending: 0, inProgress: 0, completed: 0, overdue: 0 }
+  });
+  
+  const [recentOpportunities, setRecentOpportunities] = useState<RecentOpportunityWithClient[]>([]);
+  const [overdueTasks, setOverdueTasks] = useState<TaskWithDetails[]>([]);
 
+  // Fetch dashboard data
   useEffect(() => {
-    // Simulate API loading
-    const timer = setTimeout(() => {
+    const fetchDashboardData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        
+        // Fetch client data
+        const clients = await clientService.getAllClients();
+        const activeClients = clients.filter(client => client.status === 'active');
+        // Assuming clients created in the last 30 days are "new"
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        const newClients = clients.filter(client => 
+          new Date(client.created_at) >= thirtyDaysAgo
+        );
+        
+        // Fetch service data
+        const services = await serviceService.getAllServices();
+        const activeServices = services.filter(service => service.status === 'active');
+        
+        // Fetch opportunity data
+        const opportunities = await opportunityService.getAllOpportunities();
+        const newOpportunities = opportunities.filter(opp => opp.status === 'new');
+        const inProgressOpportunities = opportunities.filter(opp => opp.status === 'in_progress');
+        const wonOpportunities = opportunities.filter(opp => opp.status === 'won');
+        const lostOpportunities = opportunities.filter(opp => opp.status === 'lost');
+        
+        // Fetch task stats
+        const taskStats = await taskService.getTaskStats();
+        
+        // Calculate total tasks
+        const totalTasks = taskStats.pending_count + taskStats.in_progress_count + 
+                          taskStats.completed_count + taskStats.overdue_count;
+        
+        // Update stats state
+        setStats({
+          clients: { 
+            total: clients.length, 
+            active: activeClients.length, 
+            new: newClients.length 
+          },
+          services: { 
+            total: services.length, 
+            active: activeServices.length 
+          },
+          opportunities: {
+            total: opportunities.length,
+            new: newOpportunities.length,
+            inProgress: inProgressOpportunities.length,
+            won: wonOpportunities.length,
+            lost: lostOpportunities.length
+          },
+          tasks: {
+            total: totalTasks,
+            pending: taskStats.pending_count,
+            inProgress: taskStats.in_progress_count,
+            completed: taskStats.completed_count,
+            overdue: taskStats.overdue_count
+          }
+        });
+        
+        // Create client lookup map for recent opportunities
+        const clientMap = new Map<number, string>();
+        clients.forEach(client => {
+          clientMap.set(client.id, client.name);
+        });
+        
+        // Prepare recent opportunities data (5 most recent)
+        const sortedOpportunities = [...opportunities].sort(
+          (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        ).slice(0, 5);
+        
+        const recentOppsWithClient = sortedOpportunities.map(opp => ({
+          id: opp.id,
+          name: opp.name,
+          client: clientMap.get(opp.client_id) || 'Unknown Client',
+          status: opp.status,
+          value: opp.estimated_value
+        }));
+        
+        setRecentOpportunities(recentOppsWithClient);
+        
+        // Fetch overdue tasks
+        const overdueTasks = await taskService.getOverdueTasks();
+        setOverdueTasks(overdueTasks);
+        
+        setLoading(false);
+      } catch (error) {
+        console.error('Error fetching dashboard data:', error);
+        setError('Failed to load dashboard data. Please try again later.');
       setLoading(false);
-    }, 1000);
-
-    // TODO: Replace with actual API calls
-    // fetchDashboardStats();
-    // fetchRecentOpportunities();
-    // fetchOverdueTasks();
-
-    return () => clearTimeout(timer);
+      }
+    };
+    
+    fetchDashboardData();
   }, []);
 
   const getStatusIcon = (status: string) => {
@@ -83,6 +179,14 @@ const Dashboard: React.FC = () => {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '50vh' }}>
         <CircularProgress />
+      </Box>
+    );
+  }
+
+  if (error) {
+    return (
+      <Box sx={{ mt: 3 }}>
+        <Alert severity="error">{error}</Alert>
       </Box>
     );
   }
@@ -155,6 +259,11 @@ const Dashboard: React.FC = () => {
             <CardHeader title="Recent Opportunities" />
             <Divider />
             <CardContent>
+              {recentOpportunities.length === 0 ? (
+                <Typography variant="body2" color="text.secondary" sx={{ p: 2, textAlign: 'center' }}>
+                  No recent opportunities found
+                </Typography>
+              ) : (
               <List>
                 {recentOpportunities.map((opportunity) => (
                   <React.Fragment key={opportunity.id}>
@@ -179,6 +288,7 @@ const Dashboard: React.FC = () => {
                   </React.Fragment>
                 ))}
               </List>
+              )}
             </CardContent>
           </Card>
         </Box>
@@ -193,6 +303,11 @@ const Dashboard: React.FC = () => {
             />
             <Divider />
             <CardContent>
+              {overdueTasks.length === 0 ? (
+                <Typography variant="body2" color="text.secondary" sx={{ p: 2, textAlign: 'center' }}>
+                  No overdue tasks
+                </Typography>
+              ) : (
               <List>
                 {overdueTasks.map((task) => (
                   <React.Fragment key={task.id}>
@@ -205,10 +320,10 @@ const Dashboard: React.FC = () => {
                         secondary={
                           <>
                             <Typography component="span" variant="body2">
-                              {task.opportunity}
+                                {task.opportunity_name}
                             </Typography>
                             {' — Due: '}
-                            {new Date(task.dueDate).toLocaleDateString()}
+                              {new Date(task.due_date).toLocaleDateString()}
                           </>
                         }
                       />
@@ -217,6 +332,7 @@ const Dashboard: React.FC = () => {
                   </React.Fragment>
                 ))}
               </List>
+              )}
             </CardContent>
           </Card>
         </Box>

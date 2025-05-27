@@ -133,7 +133,7 @@ export class TaskModel {
       JOIN clients c ON o.client_id = c.id
       JOIN services s ON o.service_id = s.id
       JOIN users u ON t.assigned_user_id = u.id
-      LEFT JOIN users bu ON bu.role = $1
+      LEFT JOIN users bu ON bu.role = $1 AND bu.business_unit = s.business_unit
       WHERE t.status != $2 AND t.due_date < NOW()
       ORDER BY t.due_date ASC
     `;

@@ -83,7 +83,6 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/admin/business-units', businessUnitRoutes);
 app.use('/api/admin/industries', industryRoutes);
 app.use('/api/users', userRoutes);
-app.use('/api/users', userRoutes);
 
 // Basic route for testing
 app.get('/', (_req: Request, res: Response) => {

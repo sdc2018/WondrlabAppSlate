@@ -8,7 +8,8 @@
     "build": "tsc",
     "test": "echo \"Error: no test specified\" && exit 1",
     "seed": "ts-node scripts/seedData.ts",
-    "seed:clear": "ts-node scripts/seedData.ts --clear"
+    "seed:clear": "ts-node scripts/seedData.ts --clear",
+    "seed:tasks": "ts-node scripts/seedTasks.ts"
   },
   "keywords": [],
   "author": "",

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Box, 
   Typography, 
@@ -27,7 +27,9 @@ import {
   InputLabel,
   Select,
   MenuItem,
-  SelectChangeEvent
+  SelectChangeEvent,
+  InputAdornment,
+  Autocomplete
 } from '@mui/material';
 
 // Icons
@@ -38,6 +40,8 @@ import BusinessIcon from '@mui/icons-material/Business';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
 import RefreshIcon from '@mui/icons-material/Refresh';
+import SearchIcon from '@mui/icons-material/Search';
+import FilterListIcon from '@mui/icons-material/FilterList';
 import { useNavigate, useLocation } from 'react-router-dom';
 
 // Services
@@ -78,6 +82,12 @@ const Matrix: React.FC = () => {
   const [selectedCell, setSelectedCell] = useState<{ clientId: number; serviceId: number } | null>(null);
   const [openCreateDialog, setOpenCreateDialog] = useState(false);
   const [users, setUsers] = useState<User[]>([]);
+  
+  // Search and filter state
+  const [clientSearchTerm, setClientSearchTerm] = useState<string>('');
+  const [serviceSearchTerm, setServiceSearchTerm] = useState<string>('');
+  const [selectedBusinessUnits, setSelectedBusinessUnits] = useState<string[]>([]);
+  const [showFilters, setShowFilters] = useState<boolean>(false);
   
   // Form data for creating new opportunities
   const [formData, setFormData] = useState<OpportunityInput>({
@@ -220,7 +230,7 @@ const Matrix: React.FC = () => {
       }
       
       // Close the dialog
-    handleCloseCreateDialog();
+      handleCloseCreateDialog();
     } catch (err) {
       console.error('Error creating opportunity:', err);
       setError('Failed to create opportunity. Please try again.');
@@ -293,7 +303,6 @@ const Matrix: React.FC = () => {
     if (cell.status === 'opportunity' || 
         (cell.status !== null && cell.status !== undefined && ['new', 'in_progress', 'qualified', 'proposal', 'negotiation', 'won', 'lost', 'on_hold'].includes(cell.status))) {
       const opportunity = opportunities.find(o => o.id === cell.opportunity_id);
-      console.log(`Found opportunity cell: clientId=${clientId}, serviceId=${serviceId}, status=${cell.status}, opportunity_id=${cell.opportunity_id}`);
       return (
         <Tooltip title={`Opportunity: ${opportunity?.name || 'Unknown'} (${cell.status})`}>
           <PendingIcon color="warning" fontSize="small" />
@@ -351,6 +360,39 @@ const Matrix: React.FC = () => {
     return <Chip label={label} color={color as any} size="small" />;
   };
 
+  // Get unique business units for filter
+  const businessUnits = useMemo(() => {
+    if (!matrixData?.services) return [];
+    
+    const uniqueBusinessUnits = Array.from(
+      new Set(matrixData.services.map(service => service.business_unit))
+    );
+    
+    return uniqueBusinessUnits;
+  }, [matrixData?.services]);
+  
+  // Filter clients based on search term
+  const filteredClients = useMemo(() => {
+    if (!matrixData?.clients) return [];
+    
+    return matrixData.clients.filter(client => 
+      client.name.toLowerCase().includes(clientSearchTerm.toLowerCase())
+    );
+  }, [matrixData?.clients, clientSearchTerm]);
+  
+  // Filter services based on search term and selected business units
+  const filteredServices = useMemo(() => {
+    if (!matrixData?.services) return [];
+    
+    return matrixData.services.filter(service => {
+      const matchesSearchTerm = service.name.toLowerCase().includes(serviceSearchTerm.toLowerCase());
+      const matchesBusinessUnit = selectedBusinessUnits.length === 0 || 
+                                 selectedBusinessUnits.includes(service.business_unit);
+      
+      return matchesSearchTerm && matchesBusinessUnit;
+    });
+  }, [matrixData?.services, serviceSearchTerm, selectedBusinessUnits]);
+  
   if (loading && !matrixData) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '50vh' }}>
@@ -363,35 +405,107 @@ const Matrix: React.FC = () => {
     <Box>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Typography variant="h4">Cross-Sell Opportunity Matrix</Typography>
-        <Button 
-          variant="outlined" 
-          startIcon={<RefreshIcon />}
-          onClick={() => {
-            setLoading(true);
-            const fetchMatrixData = async () => {
-              try {
-                // Get matrix data from the API
-                const data = await opportunityService.getMatrixData();
-                setMatrixData(data);
-                
-                // Get all opportunities for additional details
-                const allOpportunities = await opportunityService.getAllOpportunities();
-                setOpportunities(allOpportunities);
-                
-                setError(null);
-              } catch (err) {
-                console.error('Error refreshing matrix data:', err);
-                setError('Failed to refresh matrix data. Please try again.');
-              } finally {
-                setLoading(false);
-              }
-            };
-            fetchMatrixData();
-          }}
-        >
-          Refresh
-        </Button>
+        <Box sx={{ display: 'flex', gap: 2 }}>
+          <Button 
+            variant="outlined" 
+            startIcon={<FilterListIcon />}
+            onClick={() => setShowFilters(!showFilters)}
+          >
+            {showFilters ? 'Hide Filters' : 'Show Filters'}
+          </Button>
+          <Button 
+            variant="outlined" 
+            startIcon={<RefreshIcon />}
+            onClick={() => {
+              setLoading(true);
+              const fetchMatrixData = async () => {
+                try {
+                  // Get matrix data from the API
+                  const data = await opportunityService.getMatrixData();
+                  setMatrixData(data);
+                  
+                  // Get all opportunities for additional details
+                  const allOpportunities = await opportunityService.getAllOpportunities();
+                  setOpportunities(allOpportunities);
+                  
+                  setError(null);
+                } catch (err) {
+                  console.error('Error refreshing matrix data:', err);
+                  setError('Failed to refresh matrix data. Please try again.');
+                } finally {
+                  setLoading(false);
+                }
+              };
+              fetchMatrixData();
+            }}
+          >
+            Refresh
+          </Button>
+        </Box>
       </Box>
+      
+      {/* Search and Filter Section */}
+      {showFilters && (
+        <Paper sx={{ p: 2, mb: 3 }}>
+          <Typography variant="h6" sx={{ mb: 2 }}>Search & Filters</Typography>
+          <Stack spacing={2}>
+            <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
+              <TextField
+                fullWidth
+                label="Search Clients"
+                variant="outlined"
+                value={clientSearchTerm}
+                onChange={(e) => setClientSearchTerm(e.target.value)}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon />
+                    </InputAdornment>
+                  ),
+                }}
+              />
+              <TextField
+                fullWidth
+                label="Search Services"
+                variant="outlined"
+                value={serviceSearchTerm}
+                onChange={(e) => setServiceSearchTerm(e.target.value)}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon />
+                    </InputAdornment>
+                  ),
+                }}
+              />
+            </Stack>
+            <Autocomplete
+              multiple
+              options={businessUnits}
+              value={selectedBusinessUnits}
+              onChange={(_, newValue) => setSelectedBusinessUnits(newValue)}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  variant="outlined"
+                  label="Filter by Business Unit"
+                  placeholder="Select Business Units"
+                />
+              )}
+              renderTags={(value, getTagProps) =>
+                value.map((option, index) => (
+                  <Chip
+                    label={option}
+                    {...getTagProps({ index })}
+                    color="primary"
+                    variant="outlined"
+                  />
+                ))
+              }
+            />
+          </Stack>
+        </Paper>
+      )}
       
       {error && (
         <Alert severity="error" sx={{ mb: 2 }}>
@@ -423,7 +537,7 @@ const Matrix: React.FC = () => {
             <TableHead>
               <TableRow>
                 <TableCell>Client</TableCell>
-                {matrixData?.services.map(service => (
+                {filteredServices.map(service => (
                   <TableCell key={service.id} align="center">
                     <Tooltip title={service.business_unit}>
                       <Typography variant="body2" noWrap>
@@ -435,14 +549,14 @@ const Matrix: React.FC = () => {
               </TableRow>
             </TableHead>
             <TableBody>
-              {matrixData?.clients.map(client => (
+              {filteredClients.map(client => (
                 <TableRow key={client.id}>
                   <TableCell>
                     <Typography variant="body2" noWrap>
                       {client.name}
                     </Typography>
                   </TableCell>
-                  {matrixData.services.map(service => (
+                  {filteredServices.map(service => (
                     <TableCell 
                       key={service.id} 
                       align="center"
@@ -611,7 +725,7 @@ const Matrix: React.FC = () => {
                 <InputLabel>Assigned User</InputLabel>
                 <Select
                   name="assigned_user_id"
-                  value={formData.assigned_user_id ? formData.assigned_user_id.toString() : '0'}
+                  value={formData.assigned_user_id ? formData.assigned_user_id.toString() : ''}
                   label="Assigned User"
                   onChange={(e) => {
                     setFormData({
@@ -620,16 +734,16 @@ const Matrix: React.FC = () => {
                     });
                   }}
                 >
-                  <MenuItem value="0">Select User</MenuItem>
+                  <MenuItem value="">Select User</MenuItem>
                   {users.map((user) => (
                     <MenuItem key={user.id} value={user.id.toString()}>
-                      {user.username} ({user.role})
+                      {user.username}
                     </MenuItem>
                   ))}
                 </Select>
               </FormControl>
               
-              <FormControl fullWidth margin="normal">
+              <FormControl fullWidth margin="normal" required>
                 <InputLabel>Status</InputLabel>
                 <Select
                   name="status"
@@ -637,15 +751,15 @@ const Matrix: React.FC = () => {
                   label="Status"
                   onChange={handleSelectChange}
                 >
-                  {statusOptions.map((status) => (
-                    <MenuItem key={status.value} value={status.value}>
-                      {status.label}
+                  {statusOptions.map((option) => (
+                    <MenuItem key={option.value} value={option.value}>
+                      {option.label}
                     </MenuItem>
                   ))}
                 </Select>
               </FormControl>
               
-              <FormControl fullWidth margin="normal">
+              <FormControl fullWidth margin="normal" required>
                 <InputLabel>Priority</InputLabel>
                 <Select
                   name="priority"
@@ -653,38 +767,30 @@ const Matrix: React.FC = () => {
                   label="Priority"
                   onChange={handleSelectChange}
                 >
-                  {priorityOptions.map((priority) => (
-                    <MenuItem key={priority.value} value={priority.value}>
-                      {priority.label}
+                  {priorityOptions.map((option) => (
+                    <MenuItem key={option.value} value={option.value}>
+                      {option.label}
                     </MenuItem>
                   ))}
                 </Select>
               </FormControl>
               
-              <Box sx={{ position: 'relative', mt: 2, mb: 1 }}>
-                <Box 
-                  sx={{ 
-                    position: 'absolute', 
-                    left: 14, 
-                    top: 14, 
-                    zIndex: 1,
-                    color: 'action.active'
-                  }}
-                >
-                  <AttachMoneyIcon fontSize="small" />
-                </Box>
-                <TextField
-                  fullWidth
-                  label="Estimated Value"
-                  name="estimated_value"
-                  type="number"
-                  value={formData.estimated_value}
-                  onChange={handleInputChange}
-                  sx={{ 
-                    '& input': { paddingLeft: '28px' }
-                  }}
-                />
-              </Box>
+              <TextField
+                margin="normal"
+                fullWidth
+                label="Estimated Value"
+                name="estimated_value"
+                type="number"
+                value={formData.estimated_value}
+                onChange={handleInputChange}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <AttachMoneyIcon />
+                    </InputAdornment>
+                  ),
+                }}
+              />
               
               <TextField
                 margin="normal"
@@ -695,29 +801,22 @@ const Matrix: React.FC = () => {
                 type="date"
                 value={formData.due_date}
                 onChange={handleInputChange}
-                sx={{ 
-                  '& input': { paddingLeft: '10px' },
-                  '& label': { transform: 'translate(14px, -9px) scale(0.75)' } 
+                InputLabelProps={{
+                  shrink: true,
                 }}
               />
               
               <TextField
                 margin="normal"
                 fullWidth
-                multiline
-                rows={3}
                 label="Notes"
                 name="notes"
+                multiline
+                rows={4}
                 value={formData.notes}
                 onChange={handleInputChange}
               />
             </Box>
-          )}
-          
-          {error && (
-            <Alert severity="error" sx={{ mt: 2 }}>
-              {error}
-            </Alert>
           )}
         </DialogContent>
         <DialogActions>
@@ -727,11 +826,7 @@ const Matrix: React.FC = () => {
             onClick={handleCreateOpportunity}
             disabled={submitting}
           >
-            {submitting ? (
-              <CircularProgress size={24} color="inherit" />
-            ) : (
-              'Create Opportunity'
-            )}
+            {submitting ? 'Creating...' : 'Create Opportunity'}
           </Button>
         </DialogActions>
       </Dialog>
