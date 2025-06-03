@@ -459,16 +459,16 @@ const Tasks: React.FC = () => {
   }
 
   return (
-    <Box sx={{ p: 3 }}>
-      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 3 }}>
-        <Typography variant="h4">Tasks</Typography>
-        <Stack direction="row" spacing={2}>
+    <Box sx={{ p: 2 }}>
+      <Stack direction="row" justifyContent="flex-end" alignItems="center" sx={{ mb: 1.5 }}>
+        <Stack direction="row" spacing={1}>
           {selectedTaskIds.size > 0 && (
             <Button 
               variant="contained" 
               color="error"
               startIcon={<DeleteIcon />}
               onClick={openDeleteConfirmation}
+              size="small"
             >
               Delete Selected ({selectedTaskIds.size})
             </Button>
@@ -477,6 +477,7 @@ const Tasks: React.FC = () => {
             variant="outlined" 
             startIcon={<FileUploadIcon />}
             onClick={handleImportClick}
+            size="small"
           >
             Import CSV
           </Button>
@@ -484,18 +485,21 @@ const Tasks: React.FC = () => {
             variant="outlined" 
             startIcon={<FileDownloadIcon />}
             onClick={handleExportClick}
+            size="small"
           >
             Export CSV
           </Button>
           <Button 
             variant="outlined" 
             onClick={handleExportTemplate}
+            size="small"
           >
             Import Template
           </Button>
           <Button 
             variant="outlined" 
             onClick={() => setShowFormatHelper(true)}
+            size="small"
           >
             CSV Format Help
           </Button>
@@ -503,22 +507,25 @@ const Tasks: React.FC = () => {
             variant="contained" 
             startIcon={<AddIcon />}
             onClick={() => handleOpenDialog()}
+            size="small"
           >
             Add Task
           </Button>
         </Stack>
       </Stack>
 
-      <Stack direction="row" spacing={2} sx={{ mb: 3 }}>
+      <Stack direction="row" spacing={1} sx={{ mb: 1.5 }}>
         <Button 
           variant={filter === 'all' ? 'contained' : 'outlined'}
           onClick={() => setFilter('all')}
+          size="small"
         >
           All Tasks
         </Button>
         <Button 
           variant={filter === 'my' ? 'contained' : 'outlined'}
           onClick={() => setFilter('my')}
+          size="small"
         >
           My Tasks
         </Button>
@@ -526,6 +533,7 @@ const Tasks: React.FC = () => {
           variant={filter === 'overdue' ? 'contained' : 'outlined'}
           color="error"
           onClick={() => setFilter('overdue')}
+          size="small"
         >
           Overdue Tasks
         </Button>

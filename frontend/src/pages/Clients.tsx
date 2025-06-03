@@ -594,14 +594,14 @@ const Clients: React.FC = () => {
   }
 
   return (
-    <Box>
-<Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 3 }}>
-        <Typography variant="h4">Clients</Typography>
-        <Box sx={{ display: 'flex', gap: 1 }}>
+    <Box sx={{ p: 2 }}>
+      <Stack direction="row" justifyContent="flex-end" alignItems="center" sx={{ mb: 1.5 }}>
+        <Box sx={{ display: 'flex', gap: 0.5 }}>
           <Button 
             variant="outlined" 
             startIcon={<FileUploadIcon />}
             onClick={handleImportClick}
+            size="small"
           >
             Import CSV
           </Button>
@@ -609,18 +609,21 @@ const Clients: React.FC = () => {
             variant="outlined" 
             startIcon={<FileDownloadIcon />}
             onClick={handleExportClick}
+            size="small"
           >
             Export CSV
           </Button>
           <Button 
             variant="outlined" 
             onClick={handleExportTemplate}
+            size="small"
           >
             Import Template
           </Button>
           <Button 
             variant="outlined" 
             onClick={() => setShowFormatHelper(true)}
+            size="small"
           >
             CSV Format Help
           </Button>
@@ -628,6 +631,7 @@ const Clients: React.FC = () => {
           variant="contained" 
           startIcon={<AddIcon />}
           onClick={() => handleOpenDialog()}
+            size="small"
         >
           Add Client
         </Button>
@@ -635,7 +639,7 @@ const Clients: React.FC = () => {
       </Stack>
 
       {/* Search Box */}
-      <Box sx={{ mb: 2 }}>
+      <Box sx={{ mb: 1.5 }}>
         <TextField
           fullWidth
           variant="outlined"

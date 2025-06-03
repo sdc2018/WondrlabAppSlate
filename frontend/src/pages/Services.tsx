@@ -409,7 +409,7 @@ const Services: React.FC = () => {
   };
 
   return (
-    <Box>
+    <Box sx={{ p: 2 }}>
       {loading && services.length === 0 ? (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '50vh' }}>
         <CircularProgress />
@@ -417,18 +417,18 @@ const Services: React.FC = () => {
       ) : (
         <>
           {error && (
-            <Alert severity="error" sx={{ mb: 2 }}>
+            <Alert severity="error" sx={{ mb: 1.5 }}>
               {error}
             </Alert>
           )}
           
-      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 3 }}>
-        <Typography variant="h4">Services</Typography>
-            <Box sx={{ display: 'flex', gap: 1 }}>
+          <Stack direction="row" justifyContent="flex-end" alignItems="center" sx={{ mb: 1.5 }}>
+            <Box sx={{ display: 'flex', gap: 0.5 }}>
               <Button 
                 variant="outlined" 
                 startIcon={<FileUploadIcon />}
                 onClick={handleImportClick}
+                size="small"
               >
                 Import CSV
               </Button>
@@ -436,18 +436,21 @@ const Services: React.FC = () => {
                 variant="outlined" 
                 startIcon={<FileDownloadIcon />}
                 onClick={handleExportClick}
+                size="small"
               >
                 Export CSV
               </Button>
               <Button 
                 variant="outlined" 
                 onClick={handleExportTemplate}
+                size="small"
               >
                 Import Template
               </Button>
               <Button 
                 variant="outlined" 
                 onClick={() => setShowFormatHelper(true)}
+                size="small"
               >
                 CSV Format Help
               </Button>
@@ -455,6 +458,7 @@ const Services: React.FC = () => {
           variant="contained" 
           startIcon={<AddIcon />}
           onClick={() => handleOpenDialog()}
+                size="small"
         >
           Add Service
         </Button>
