@@ -89,6 +89,9 @@ const Matrix: React.FC = () => {
   const [selectedBusinessUnits, setSelectedBusinessUnits] = useState<string[]>([]);
   const [showFilters, setShowFilters] = useState<boolean>(false);
   
+  // Legend filter state for interactive filtering
+  const [legendFilter, setLegendFilter] = useState<string | null>(null); // 'existing', 'potential', or null for all
+  
   // Form data for creating new opportunities
   const [formData, setFormData] = useState<OpportunityInput>({
     name: '',
@@ -242,12 +245,35 @@ const Matrix: React.FC = () => {
   const getCellStyle = (clientId: number, serviceId: number) => {
     const cell = matrixData?.matrix[clientId]?.[serviceId];
     
+    // Determine cell type for legend filtering
+    let cellType = 'potential'; // default
+    
+    if (cell?.status === 'active') {
+      cellType = 'active';
+    } else if (cell && (cell.status === 'opportunity' || 
+        (cell.status !== null && cell.status !== undefined && 
+         ['new', 'in_progress', 'qualified', 'proposal', 'negotiation', 'won', 'lost', 'on_hold'].includes(cell.status)))) {
+      cellType = 'existing';
+    }
+    
+    // Apply legend filter opacity
+    let opacity = 1;
+    if (legendFilter) {
+      if (legendFilter === 'existing' && cellType !== 'existing') {
+        opacity = 0.3;
+      } else if (legendFilter === 'potential' && cellType !== 'potential') {
+        opacity = 0.3;
+      }
+    }
+    
     if (!cell) {
       return {
         backgroundColor: '#f5f5f5',
         cursor: 'pointer',
+        opacity: opacity,
         '&:hover': {
           backgroundColor: '#e0e0e0',
+          opacity: 1,
         }
       };
     }
@@ -255,7 +281,11 @@ const Matrix: React.FC = () => {
     if (cell.status === 'active') {
       return {
         backgroundColor: '#e8f5e9', // Light green
-        cursor: 'default'
+        cursor: 'default',
+        opacity: opacity,
+        '&:hover': {
+          opacity: 1,
+        }
       };
     }
     
@@ -265,8 +295,10 @@ const Matrix: React.FC = () => {
       return {
         backgroundColor: '#fff8e1', // Light amber
         cursor: 'pointer',
+        opacity: opacity,
         '&:hover': {
           backgroundColor: '#ffecb3',
+          opacity: 1,
         }
       };
     }
@@ -274,8 +306,10 @@ const Matrix: React.FC = () => {
     return {
       backgroundColor: '#f5f5f5',
       cursor: 'pointer',
+      opacity: opacity,
       '&:hover': {
         backgroundColor: '#e0e0e0',
+        opacity: 1,
       }
     };
   };
@@ -371,27 +405,75 @@ const Matrix: React.FC = () => {
     return uniqueBusinessUnits;
   }, [matrixData?.services]);
   
-  // Filter clients based on search term
+  // Filter clients based on search term and legend filter
   const filteredClients = useMemo(() => {
     if (!matrixData?.clients) return [];
     
-    return matrixData.clients.filter(client => 
+    let clients = matrixData.clients.filter(client => 
       client.name.toLowerCase().includes(clientSearchTerm.toLowerCase())
     );
-  }, [matrixData?.clients, clientSearchTerm]);
+    
+    // Apply legend filter
+    if (legendFilter) {
+      clients = clients.filter(client => {
+        // Check if this client has any cells that match the legend filter
+        return filteredServices.some(service => {
+          const cell = matrixData?.matrix[client.id]?.[service.id];
+          
+          if (legendFilter === 'existing') {
+            // Show clients with existing opportunities (amber cells)
+            return cell && (cell.status === 'opportunity' || 
+                          (cell.status !== null && cell.status !== undefined && 
+                           ['new', 'in_progress', 'qualified', 'proposal', 'negotiation', 'won', 'lost', 'on_hold'].includes(cell.status)));
+          } else if (legendFilter === 'potential') {
+            // Show clients with potential opportunities (gray cells - no existing relationship)
+            return !cell || (cell.status === null || cell.status === undefined);
+          }
+          
+          return false;
+        });
+      });
+    }
+    
+    return clients;
+  }, [matrixData?.clients, clientSearchTerm, legendFilter, matrixData?.matrix]);
   
-  // Filter services based on search term and selected business units
+  // Filter services based on search term, selected business units, and legend filter
   const filteredServices = useMemo(() => {
     if (!matrixData?.services) return [];
     
-    return matrixData.services.filter(service => {
+    let services = matrixData.services.filter(service => {
       const matchesSearchTerm = service.name.toLowerCase().includes(serviceSearchTerm.toLowerCase());
       const matchesBusinessUnit = selectedBusinessUnits.length === 0 || 
                                  selectedBusinessUnits.includes(service.business_unit);
       
       return matchesSearchTerm && matchesBusinessUnit;
     });
-  }, [matrixData?.services, serviceSearchTerm, selectedBusinessUnits]);
+    
+    // Apply legend filter
+    if (legendFilter) {
+      services = services.filter(service => {
+        // Check if this service has any cells that match the legend filter
+        return filteredClients.some(client => {
+          const cell = matrixData?.matrix[client.id]?.[service.id];
+          
+          if (legendFilter === 'existing') {
+            // Show services with existing opportunities (amber cells)
+            return cell && (cell.status === 'opportunity' || 
+                          (cell.status !== null && cell.status !== undefined && 
+                           ['new', 'in_progress', 'qualified', 'proposal', 'negotiation', 'won', 'lost', 'on_hold'].includes(cell.status)));
+          } else if (legendFilter === 'potential') {
+            // Show services with potential opportunities (gray cells - no existing relationship)
+            return !cell || (cell.status === null || cell.status === undefined);
+          }
+          
+          return false;
+        });
+      });
+    }
+    
+    return services;
+  }, [matrixData?.services, serviceSearchTerm, selectedBusinessUnits, legendFilter, matrixData?.matrix]);
   
   if (loading && !matrixData) {
     return (
@@ -444,43 +526,54 @@ const Matrix: React.FC = () => {
         </Box>
       </Box>
       
-      {/* Search and Filter Section */}
+      {/* Search and Filter Section - Font sizes reduced by 30% */}
       {showFilters && (
         <Paper sx={{ p: 2, mb: 3 }}>
-          <Typography variant="h6" sx={{ mb: 2 }}>Search & Filters</Typography>
+          <Typography variant="h6" sx={{ mb: 2, fontSize: '1.05rem' }}>Search & Filters</Typography>
           <Stack spacing={2}>
             <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
               <TextField
                 fullWidth
                 label="Search Clients"
                 variant="outlined"
+                size="small"
                 value={clientSearchTerm}
                 onChange={(e) => setClientSearchTerm(e.target.value)}
                 InputProps={{
                   startAdornment: (
                     <InputAdornment position="start">
-                      <SearchIcon />
+                      <SearchIcon fontSize="small" />
                     </InputAdornment>
                   ),
+                  sx: { fontSize: '0.875rem' }
+                }}
+                InputLabelProps={{
+                  sx: { fontSize: '0.875rem' }
                 }}
               />
               <TextField
                 fullWidth
                 label="Search Services"
                 variant="outlined"
+                size="small"
                 value={serviceSearchTerm}
                 onChange={(e) => setServiceSearchTerm(e.target.value)}
                 InputProps={{
                   startAdornment: (
                     <InputAdornment position="start">
-                      <SearchIcon />
+                      <SearchIcon fontSize="small" />
                     </InputAdornment>
                   ),
+                  sx: { fontSize: '0.875rem' }
+                }}
+                InputLabelProps={{
+                  sx: { fontSize: '0.875rem' }
                 }}
               />
             </Stack>
             <Autocomplete
               multiple
+              size="small"
               options={businessUnits}
               value={selectedBusinessUnits}
               onChange={(_, newValue) => setSelectedBusinessUnits(newValue)}
@@ -490,6 +583,13 @@ const Matrix: React.FC = () => {
                   variant="outlined"
                   label="Filter by Business Unit"
                   placeholder="Select Business Units"
+                  InputProps={{
+                    ...params.InputProps,
+                    sx: { fontSize: '0.875rem' }
+                  }}
+                  InputLabelProps={{
+                    sx: { fontSize: '0.875rem' }
+                  }}
                 />
               )}
               renderTags={(value, getTagProps) =>
@@ -499,9 +599,16 @@ const Matrix: React.FC = () => {
                     {...getTagProps({ index })}
                     color="primary"
                     variant="outlined"
+                    size="small"
+                    sx={{ fontSize: '0.75rem' }}
                   />
                 ))
               }
+              sx={{
+                '& .MuiAutocomplete-option': {
+                  fontSize: '0.875rem'
+                }
+              }}
             />
           </Stack>
         </Paper>
@@ -514,21 +621,74 @@ const Matrix: React.FC = () => {
       )}
 
       <Paper sx={{ mb: 3, p: 2 }}>
-        <Typography variant="h6" sx={{ mb: 2 }}>Legend</Typography>
-        <Stack direction="row" spacing={3}>
-          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+        <Typography variant="h6" sx={{ mb: 2 }}>Interactive Legend</Typography>
+        <Stack direction="row" spacing={3} flexWrap="wrap" useFlexGap>
+          <Box 
+            sx={{ 
+              display: 'flex', 
+              alignItems: 'center',
+              cursor: 'pointer',
+              padding: '4px 8px',
+              borderRadius: '4px',
+              border: legendFilter === null ? '2px solid #1976d2' : '1px solid transparent',
+              backgroundColor: legendFilter === null ? '#e3f2fd' : 'transparent',
+              '&:hover': {
+                backgroundColor: '#f5f5f5'
+              }
+            }}
+            onClick={() => setLegendFilter(null)}
+          >
             <Box sx={{ width: 20, height: 20, backgroundColor: '#e8f5e9', mr: 1 }} />
-            <Typography variant="body2">Active Service</Typography>
+            <Typography variant="body2" sx={{ fontWeight: legendFilter === null ? 'bold' : 'normal' }}>
+              Active Service
+            </Typography>
           </Box>
-          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+          <Box 
+            sx={{ 
+              display: 'flex', 
+              alignItems: 'center',
+              cursor: 'pointer',
+              padding: '4px 8px',
+              borderRadius: '4px',
+              border: legendFilter === 'existing' ? '2px solid #1976d2' : '1px solid transparent',
+              backgroundColor: legendFilter === 'existing' ? '#e3f2fd' : 'transparent',
+              '&:hover': {
+                backgroundColor: '#f5f5f5'
+              }
+            }}
+            onClick={() => setLegendFilter(legendFilter === 'existing' ? null : 'existing')}
+          >
             <Box sx={{ width: 20, height: 20, backgroundColor: '#fff8e1', mr: 1 }} />
-            <Typography variant="body2">Existing Opportunity</Typography>
+            <Typography variant="body2" sx={{ fontWeight: legendFilter === 'existing' ? 'bold' : 'normal' }}>
+              Existing Opportunities
+            </Typography>
           </Box>
-          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+          <Box 
+            sx={{ 
+              display: 'flex', 
+              alignItems: 'center',
+              cursor: 'pointer',
+              padding: '4px 8px',
+              borderRadius: '4px',
+              border: legendFilter === 'potential' ? '2px solid #1976d2' : '1px solid transparent',
+              backgroundColor: legendFilter === 'potential' ? '#e3f2fd' : 'transparent',
+              '&:hover': {
+                backgroundColor: '#f5f5f5'
+              }
+            }}
+            onClick={() => setLegendFilter(legendFilter === 'potential' ? null : 'potential')}
+          >
             <Box sx={{ width: 20, height: 20, backgroundColor: '#f5f5f5', mr: 1 }} />
-            <Typography variant="body2">Potential Opportunity</Typography>
+            <Typography variant="body2" sx={{ fontWeight: legendFilter === 'potential' ? 'bold' : 'normal' }}>
+              Potential Opportunities
+            </Typography>
           </Box>
         </Stack>
+        {legendFilter && (
+          <Typography variant="caption" sx={{ mt: 1, display: 'block', color: 'text.secondary' }}>
+            Click on a legend item again to show all opportunities, or click "Active Service" to reset filter.
+          </Typography>
+        )}
       </Paper>
 
       <Paper>
