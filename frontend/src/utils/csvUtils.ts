@@ -332,19 +332,24 @@ export const validateCSVData = (
         warnings.push(`Row ${rowNumber}: Pricing model "${row.pricing_model}" is not in the standard list. Valid options: ${validPricingModels.join(', ')}`);
       }
     } else if (type === 'opportunities') {
-      // Validate IDs are numbers
+      // Validate IDs are numbers (if provided as IDs rather than names)
       ['client_id', 'service_id', 'assigned_user_id'].forEach(field => {
         if (row[field] && isNaN(Number(row[field]))) {
-          errors.push(`Row ${rowNumber}: ${field} must be a number. Expected a numeric value, but got: "${row[field]}"`);
+          // Only show error if it's clearly meant to be a number (not a name)
+          const value = String(row[field]).trim();
+          if (/^\d+$/.test(value)) {
+            errors.push(`Row ${rowNumber}: ${field} must be a valid number. Expected a numeric value, but got: "${row[field]}"`);
+          }
+          // If it's not numeric, we'll assume it's a name and handle it in prepareDataForImport
         }
       });
       
-      // Validate estimated_value is a number
-      if (row.estimated_value && isNaN(Number(row.estimated_value))) {
+      // Validate estimated_value is a number (if provided)
+      if (row.estimated_value !== undefined && row.estimated_value !== '' && row.estimated_value !== null && isNaN(Number(row.estimated_value))) {
         errors.push(`Row ${rowNumber}: estimated_value must be a number. Expected a numeric value, but got: "${row.estimated_value}"`);
       }
       
-      // Validate date format
+      // Validate date format (if provided)
       if (row.due_date && !row.due_date.match(/^\d{4}-\d{2}-\d{2}$/)) {
         errors.push(`Row ${rowNumber}: due_date must be in YYYY-MM-DD format. Expected format like "2024-12-31", but got: "${row.due_date}"`);
       }
@@ -394,9 +399,10 @@ const isValidEmail = (email: string): boolean => {
  * Prepare data for import by cleaning and transforming fields
  * @param data Raw CSV data
  * @param type Type of data being imported
+ * @param lookupData Optional lookup data for resolving names to IDs
  * @returns Cleaned data ready for import
  */
-export const prepareDataForImport = (data: any[], type: 'clients' | 'services' | 'opportunities'): any[] => {
+export const prepareDataForImport = (data: any[], type: 'clients' | 'services' | 'opportunities', lookupData?: any): any[] => {
   return data.map(item => {
     // Remove system fields that shouldn't be imported
     const cleaned = { ...item };
@@ -444,11 +450,67 @@ export const prepareDataForImport = (data: any[], type: 'clients' | 'services' |
         cleaned.applicable_industries = [];
       }
     } else if (type === 'opportunities') {
+      // Handle client lookup (client_name -> client_id)
+      if (cleaned.client_name && !cleaned.client_id && lookupData?.clients) {
+        const client = lookupData.clients.find((c: any) => 
+          c.name.toLowerCase().trim() === String(cleaned.client_name).toLowerCase().trim()
+        );
+        if (client) {
+          cleaned.client_id = client.id;
+        } else {
+          console.warn(`Client not found: ${cleaned.client_name}`);
+        }
+      }
+      
+      // Handle service lookup (service_name -> service_id)
+      if (cleaned.service_name && !cleaned.service_id && lookupData?.services) {
+        const service = lookupData.services.find((s: any) => 
+          s.name.toLowerCase().trim() === String(cleaned.service_name).toLowerCase().trim()
+        );
+        if (service) {
+          cleaned.service_id = service.id;
+        } else {
+          console.warn(`Service not found: ${cleaned.service_name}`);
+        }
+      }
+      
+      // Handle user lookup (assigned_user_name -> assigned_user_id)
+      if (cleaned.assigned_user_name && !cleaned.assigned_user_id && lookupData?.users) {
+        const user = lookupData.users.find((u: any) => 
+          u.username.toLowerCase().trim() === String(cleaned.assigned_user_name).toLowerCase().trim()
+        );
+        if (user) {
+          cleaned.assigned_user_id = user.id;
+        } else {
+          console.warn(`User not found: ${cleaned.assigned_user_name}`);
+        }
+      }
+      
       // Remove display fields that shouldn't be imported
       delete cleaned.client_name;
       delete cleaned.service_name;
       delete cleaned.service_business_unit;
       delete cleaned.assigned_user_name;
+      
+      // Set defaults for missing fields
+      if (!cleaned.status || cleaned.status === '') {
+        cleaned.status = 'new';
+      }
+      
+      if (!cleaned.priority || cleaned.priority === '') {
+        cleaned.priority = 'medium';
+      }
+      
+      if (cleaned.estimated_value === undefined || cleaned.estimated_value === '' || cleaned.estimated_value === null) {
+        cleaned.estimated_value = 0;
+      }
+      
+      // Set default due_date if not provided (30 days from now)
+      if (!cleaned.due_date || cleaned.due_date === '') {
+        const futureDate = new Date();
+        futureDate.setDate(futureDate.getDate() + 30);
+        cleaned.due_date = futureDate.toISOString().split('T')[0];
+      }
       
       // Ensure numeric fields are numbers
       ['client_id', 'service_id', 'assigned_user_id', 'estimated_value'].forEach(field => {
@@ -456,6 +518,11 @@ export const prepareDataForImport = (data: any[], type: 'clients' | 'services' |
           cleaned[field] = Number(cleaned[field]);
         }
       });
+      
+      // Default assigned_user_id to admin (31) if still not set
+      if (!cleaned.assigned_user_id || isNaN(cleaned.assigned_user_id)) {
+        cleaned.assigned_user_id = 31; // Default to admin user
+      }
     }
     
     return cleaned;

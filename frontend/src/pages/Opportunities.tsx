@@ -573,8 +573,8 @@ const Opportunities: React.FC = () => {
       // Parse CSV file
       const parsedData = await parseCSVFile(file);
       
-      // Validate the CSV data
-      const requiredFields = ['name', 'client_id', 'service_id', 'assigned_user_id', 'status', 'priority', 'estimated_value', 'due_date'];
+      // Validate the CSV data - make most fields optional with smart defaults
+      const requiredFields = ['name']; // Only name is truly required
       const validationResult = validateCSVData(parsedData, requiredFields, 'opportunities');
       
       if (!validationResult.valid) {
@@ -587,8 +587,13 @@ const Opportunities: React.FC = () => {
         console.warn('CSV Import Warnings:', validationResult.warnings);
       }
       
-      // Prepare data for import
-      const processedData = prepareDataForImport(parsedData, 'opportunities');
+      // Prepare data for import with lookup data for name-to-ID resolution
+      const lookupData = {
+        clients: clients,
+        services: services,
+        users: users
+      };
+      const processedData = prepareDataForImport(parsedData, 'opportunities', lookupData);
       
       // Process and create opportunities
       for (const opportunityData of processedData) {
@@ -643,14 +648,14 @@ const Opportunities: React.FC = () => {
     try {
       const templateData = [{
         name: 'Q1 Marketing Campaign',
-        client_id: 1,
-        service_id: 1,
-        assigned_user_id: 1,
+        client_name: 'Example Client Corp',
+        service_name: 'Digital Marketing Strategy',
+        assigned_user_name: 'admin',
         status: 'new',
         priority: 'high',
         estimated_value: 10000,
         due_date: '2024-03-31',
-        notes: 'High priority opportunity for Q1'
+        notes: 'High priority opportunity for Q1 - you can use client names, service names, and usernames instead of IDs'
       }];
       
       exportForImport(templateData, 'opportunities_import_template.csv', 'opportunities');
