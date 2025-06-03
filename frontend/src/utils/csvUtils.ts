@@ -424,9 +424,15 @@ export const prepareDataForImport = (data: any[], type: 'clients' | 'services' |
         cleaned.services_used = [];
       }
       
-      // Ensure account_owner_id is a number
-      if (cleaned.account_owner_id) {
+      // Ensure account_owner_id is a number, default to admin (31) if not provided
+      if (cleaned.account_owner_id !== undefined && cleaned.account_owner_id !== '' && cleaned.account_owner_id !== null) {
         cleaned.account_owner_id = parseInt(String(cleaned.account_owner_id), 10);
+        if (isNaN(cleaned.account_owner_id)) {
+          cleaned.account_owner_id = 31; // Default to admin if invalid number
+        }
+      } else {
+        // Default to admin user when no account owner is specified
+        cleaned.account_owner_id = 31;
       }
     } else if (type === 'services') {
       // Ensure applicable_industries is an array
