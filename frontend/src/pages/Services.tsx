@@ -324,8 +324,8 @@ const Services: React.FC = () => {
       setLoading(true);
       const parsedData = await parseCSVFile(file);
       
-      // Validate the CSV data
-      const requiredFields = ['name', 'description', 'business_unit', 'pricing_model', 'client_role', 'status'];
+      // Validate the CSV data - make some fields optional for easier imports
+      const requiredFields = ['name', 'business_unit', 'pricing_model']; // Only essential fields required
       const validationResult = validateCSVData(parsedData, requiredFields, 'services');
       
       if (!validationResult.valid) {
@@ -392,13 +392,13 @@ const Services: React.FC = () => {
     try {
       const templateData = [{
         name: 'Digital Marketing Strategy',
-        description: 'Comprehensive digital marketing planning and execution',
         business_unit: 'Digital Marketing',
         pricing_model: 'Project-based',
-        pricing_details: '$5,000 - $15,000 per project',
-        applicable_industries: 'Technology;Healthcare;Finance',
-        client_role: 'CMO',
-        status: 'active'
+        description: 'Comprehensive digital marketing planning and execution (optional)',
+        pricing_details: '$5,000 - $15,000 per project (optional)',
+        applicable_industries: 'Technology;Healthcare;Finance (optional)',
+        client_role: 'CMO (optional - defaults to Decision Maker)',
+        status: 'active (optional - defaults to active)'
       }];
       
       exportForImport(templateData, 'services_import_template.csv', 'services');

@@ -441,13 +441,31 @@ export const prepareDataForImport = (data: any[], type: 'clients' | 'services' |
         cleaned.account_owner_id = 31;
       }
     } else if (type === 'services') {
+      // Set defaults for missing optional fields
+      if (!cleaned.description || cleaned.description === '') {
+        cleaned.description = `Service: ${cleaned.name}`; // Default description based on name
+      }
+      
+      if (!cleaned.client_role || cleaned.client_role === '') {
+        cleaned.client_role = 'Decision Maker'; // Default client role
+      }
+      
+      if (!cleaned.status || cleaned.status === '') {
+        cleaned.status = 'active'; // Default to active status
+      }
+      
+      if (!cleaned.pricing_details || cleaned.pricing_details === '') {
+        cleaned.pricing_details = 'Contact for pricing'; // Default pricing details
+      }
+      
       // Ensure applicable_industries is an array
       if (cleaned.applicable_industries) {
         if (typeof cleaned.applicable_industries === 'string') {
           cleaned.applicable_industries = cleaned.applicable_industries.split(';').map((industry: string) => industry.trim()).filter((industry: string) => industry !== '');
         }
       } else {
-        cleaned.applicable_industries = [];
+        cleaned.applicable_industries = []; // Default to empty array
+      }
       }
     } else if (type === 'opportunities') {
       // Handle client lookup (client_name -> client_id)
