@@ -256,10 +256,16 @@ export const validateCSVData = (
   
   // Check for required fields in headers
   const headers = Object.keys(data[0]);
+  const missingFields = [];
   for (const field of requiredFields) {
     if (!headers.includes(field)) {
-      errors.push(`Required field "${field}" is missing from CSV headers`);
+      missingFields.push(field);
     }
+  }
+  
+  if (missingFields.length > 0) {
+    errors.push(`Missing required columns in CSV header: ${missingFields.join(', ')}. Please ensure your CSV includes these columns.`);
+    errors.push(`Available columns in your CSV: ${headers.join(', ')}`);
   }
   
   // Check for ID field (should not be present for imports)
@@ -279,9 +285,8 @@ export const validateCSVData = (
     // Check required fields are not empty
     requiredFields.forEach(field => {
       const value = row[field];
-      if (value === null || value === undefined || value === '' || 
-          (Array.isArray(value) && value.length === 0)) {
-        errors.push(`Row ${rowNumber}: Required field "${field}" is empty`);
+      if (value === null || value === undefined || value === '') {
+        errors.push(`Row ${rowNumber}: Required field "${field}" is empty or missing. Please provide a value for this field.`);
       }
     });
     
@@ -289,59 +294,83 @@ export const validateCSVData = (
     if (type === 'clients') {
       // Validate email format
       if (row.contact_email && !isValidEmail(row.contact_email)) {
-        errors.push(`Row ${rowNumber}: Invalid email format for contact_email`);
+        errors.push(`Row ${rowNumber}: Invalid email format for contact_email. Expected format: user@domain.com, but got: "${row.contact_email}"`);
       }
       
       // Validate account_owner_id is a number
       if (row.account_owner_id && isNaN(Number(row.account_owner_id))) {
-        errors.push(`Row ${rowNumber}: account_owner_id must be a number`);
+        errors.push(`Row ${rowNumber}: account_owner_id must be a number. Expected a numeric value, but got: "${row.account_owner_id}"`);
       }
       
-      // Validate status
+      // Validate status (case-insensitive)
       const validStatuses = ['active', 'inactive', 'prospect'];
-      if (row.status && !validStatuses.includes(row.status)) {
-        errors.push(`Row ${rowNumber}: Invalid status. Must be one of: ${validStatuses.join(', ')}`);
+      if (row.status) {
+        const statusLower = String(row.status).toLowerCase().trim();
+        if (!validStatuses.includes(statusLower)) {
+          errors.push(`Row ${rowNumber}: Invalid status "${row.status}". Must be one of: ${validStatuses.join(', ')} (case-insensitive)`);
+        } else {
+          // Normalize the status to lowercase
+          row.status = statusLower;
+        }
       }
     } else if (type === 'services') {
-      // Validate status
+      // Validate status (case-insensitive)
       const validStatuses = ['active', 'inactive', 'deprecated'];
-      if (row.status && !validStatuses.includes(row.status)) {
-        errors.push(`Row ${rowNumber}: Invalid status. Must be one of: ${validStatuses.join(', ')}`);
+      if (row.status) {
+        const statusLower = String(row.status).toLowerCase().trim();
+        if (!validStatuses.includes(statusLower)) {
+          errors.push(`Row ${rowNumber}: Invalid status "${row.status}". Must be one of: ${validStatuses.join(', ')} (case-insensitive)`);
+        } else {
+          // Normalize the status to lowercase
+          row.status = statusLower;
+        }
       }
       
       // Validate pricing_model
       const validPricingModels = ['Fixed Price', 'Hourly Rate', 'Retainer', 'Project-based', 'Commission', 'Value-based'];
       if (row.pricing_model && !validPricingModels.includes(row.pricing_model)) {
-        warnings.push(`Row ${rowNumber}: Pricing model "${row.pricing_model}" is not in the standard list`);
+        warnings.push(`Row ${rowNumber}: Pricing model "${row.pricing_model}" is not in the standard list. Valid options: ${validPricingModels.join(', ')}`);
       }
     } else if (type === 'opportunities') {
       // Validate IDs are numbers
       ['client_id', 'service_id', 'assigned_user_id'].forEach(field => {
         if (row[field] && isNaN(Number(row[field]))) {
-          errors.push(`Row ${rowNumber}: ${field} must be a number`);
+          errors.push(`Row ${rowNumber}: ${field} must be a number. Expected a numeric value, but got: "${row[field]}"`);
         }
       });
       
       // Validate estimated_value is a number
       if (row.estimated_value && isNaN(Number(row.estimated_value))) {
-        errors.push(`Row ${rowNumber}: estimated_value must be a number`);
+        errors.push(`Row ${rowNumber}: estimated_value must be a number. Expected a numeric value, but got: "${row.estimated_value}"`);
       }
       
       // Validate date format
       if (row.due_date && !row.due_date.match(/^\d{4}-\d{2}-\d{2}$/)) {
-        errors.push(`Row ${rowNumber}: due_date must be in YYYY-MM-DD format`);
+        errors.push(`Row ${rowNumber}: due_date must be in YYYY-MM-DD format. Expected format like "2024-12-31", but got: "${row.due_date}"`);
       }
       
-      // Validate status
+      // Validate status (case-insensitive)
       const validStatuses = ['new', 'in_progress', 'qualified', 'proposal', 'negotiation', 'won', 'lost', 'on_hold'];
-      if (row.status && !validStatuses.includes(row.status)) {
-        errors.push(`Row ${rowNumber}: Invalid status. Must be one of: ${validStatuses.join(', ')}`);
+      if (row.status) {
+        const statusLower = String(row.status).toLowerCase().trim();
+        if (!validStatuses.includes(statusLower)) {
+          errors.push(`Row ${rowNumber}: Invalid status "${row.status}". Must be one of: ${validStatuses.join(', ')} (case-insensitive)`);
+        } else {
+          // Normalize the status to lowercase
+          row.status = statusLower;
+        }
       }
       
-      // Validate priority
+      // Validate priority (case-insensitive)
       const validPriorities = ['low', 'medium', 'high', 'critical'];
-      if (row.priority && !validPriorities.includes(row.priority)) {
-        errors.push(`Row ${rowNumber}: Invalid priority. Must be one of: ${validPriorities.join(', ')}`);
+      if (row.priority) {
+        const priorityLower = String(row.priority).toLowerCase().trim();
+        if (!validPriorities.includes(priorityLower)) {
+          errors.push(`Row ${rowNumber}: Invalid priority "${row.priority}". Must be one of: ${validPriorities.join(', ')} (case-insensitive)`);
+        } else {
+          // Normalize the priority to lowercase
+          row.priority = priorityLower;
+        }
       }
     }
   });
@@ -377,14 +406,21 @@ export const prepareDataForImport = (data: any[], type: 'clients' | 'services' |
     
     // Type-specific cleaning
     if (type === 'clients') {
-      // Ensure services_used is an array of numbers
-      if (cleaned.services_used) {
+      // Ensure services_used is an array of numbers (allow empty)
+      if (cleaned.services_used && cleaned.services_used !== '') {
         if (typeof cleaned.services_used === 'string') {
-          cleaned.services_used = cleaned.services_used.split(';').map((id: string) => parseInt(id.trim(), 10)).filter((id: number) => !isNaN(id));
+          // Split by semicolon and filter out empty strings
+          const serviceIds = cleaned.services_used.split(';')
+            .map((id: string) => id.trim())
+            .filter((id: string) => id !== '')
+            .map((id: string) => parseInt(id, 10))
+            .filter((id: number) => !isNaN(id));
+          cleaned.services_used = serviceIds;
         } else if (Array.isArray(cleaned.services_used)) {
           cleaned.services_used = cleaned.services_used.map((id: any) => parseInt(String(id), 10)).filter((id: number) => !isNaN(id));
         }
       } else {
+        // Allow empty services_used for placeholder clients
         cleaned.services_used = [];
       }
       

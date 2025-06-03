@@ -138,8 +138,8 @@ const Clients: React.FC = () => {
       
       const parsedData = await parseCSVFile(file);
       
-      // Validate the CSV data
-      const requiredFields = ['name', 'industry', 'contact_name', 'contact_email', 'contact_phone', 'address', 'account_owner_id', 'status'];
+      // Validate the CSV data - only truly essential fields are required
+      const requiredFields = ['name', 'industry', 'contact_name', 'contact_email', 'account_owner_id', 'status'];
       const validationResult = validateCSVData(parsedData, requiredFields, 'clients');
       
       if (!validationResult.valid) {
@@ -216,9 +216,9 @@ const Clients: React.FC = () => {
         contact_phone: '+1-555-0123',
         address: '123 Business St, City, State 12345',
         account_owner_id: 1,
-        services_used: '1;2',
-        crm_link: 'https://crm.example.com/client/123',
-        notes: 'Important client with high potential',
+        services_used: '',
+        crm_link: '',
+        notes: '',
         status: 'active'
       }];
       
