@@ -1,89 +1,108 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { 
-  Box, 
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import {
+  Box,
   Button,
-  Typography,
-  TextField,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
   Table,
   TableBody,
   TableCell,
   TableContainer,
   TableHead,
   TableRow,
-  TableSortLabel,
   Paper,
+  Typography,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
   FormControl,
   InputLabel,
   Select,
   MenuItem,
-  Chip,
-  Stack,
-  IconButton,
+  SelectChangeEvent,
   CircularProgress,
   Alert,
+  Chip,
+  IconButton,
+  Stack,
   Autocomplete,
+  TableSortLabel,
   InputAdornment
 } from '@mui/material';
-import { SelectChangeEvent } from '@mui/material/Select';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import BusinessIcon from '@mui/icons-material/Business';
+import SearchIcon from '@mui/icons-material/Search';
 import FileUploadIcon from '@mui/icons-material/FileUpload';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
-import SearchIcon from '@mui/icons-material/Search';
-import SortIcon from '@mui/icons-material/Sort';
 
 // Import services
-import userService from '../services/userService';
 import clientService, { Client, ClientInput } from '../services/clientService';
 import serviceService, { Service } from '../services/serviceService';
+import userService from '../services/userService';
+import { exportToCSV, parseCSVFile, validateCSVData, prepareDataForImport, exportForImport } from '../utils/csvUtils';
+import CSVFormatHelper from '../components/CSVFormatHelper';
 
-// Import CSV utilities
-import { exportToCSV, parseCSVFile, validateCSVData } from '../utils/csvUtils';
+// Define User interface locally since it's not exported from userService
+interface User {
+  id: number;
+  username: string;
+  email: string;
+  role: string;
+}
 
-// Industries for dropdown
+// Define industries
 const industries = [
   'Technology',
-  'Finance',
   'Healthcare',
+  'Finance',
+  'Education',
   'Retail',
   'Manufacturing',
-  'Education',
+  'Real Estate',
   'Entertainment',
-  'Food & Beverage'
+  'Automotive',
+  'Food & Beverage',
+  'Travel & Tourism',
+  'Energy',
+  'Telecommunications',
+  'Construction',
+  'Government',
+  'Non-profit',
+  'Other'
 ];
 
-// Status options
+// Define status options
 const statusOptions = ['active', 'inactive', 'prospect'];
 
-// Type for sort direction
-type SortDirection = 'asc' | 'desc';
-
-// Type for sort field
+// Define sort configuration type
 type SortField = 'name' | 'industry' | 'account_owner_id' | 'services_used';
-
-// Interface for sort configuration
 interface SortConfig {
   field: SortField;
-  direction: SortDirection;
+  direction: 'asc' | 'desc';
 }
 
 const Clients: React.FC = () => {
+  // State variables
   const [clients, setClients] = useState<Client[]>([]);
   const [services, setServices] = useState<Service[]>([]);
-  const [accountOwners, setAccountOwners] = useState<any[]>([]);
+  const [accountOwners, setAccountOwners] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingServices, setLoadingServices] = useState(true);
   const [loadingAccountOwners, setLoadingAccountOwners] = useState(true);
   const [openDialog, setOpenDialog] = useState(false);
   const [currentClient, setCurrentClient] = useState<Client | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [showFormatHelper, setShowFormatHelper] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [sortConfig, setSortConfig] = useState<SortConfig>({ field: 'name', direction: 'asc' });
+  
+  // File input ref for CSV import
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // Form data state
   const [formData, setFormData] = useState({
     name: '',
     industry: '',
@@ -97,11 +116,6 @@ const Clients: React.FC = () => {
     notes: '',
     status: 'active'
   });
-  const [error, setError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
-
-  // Reference for CSV file input
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Handler for CSV import button click
   const handleImportClick = () => {
@@ -110,7 +124,7 @@ const Clients: React.FC = () => {
     }
   };
 
-  // Handler for CSV file selection
+  // Handler for file selection and CSV import
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     if (!event.target.files || event.target.files.length === 0) {
       return;
@@ -124,25 +138,22 @@ const Clients: React.FC = () => {
       
       const parsedData = await parseCSVFile(file);
       
-      // Validate the CSV data - only name is mandatory
-      const requiredFields = ['name'];
-      const validationResult = validateCSVData(parsedData, requiredFields);
+      // Validate the CSV data
+      const requiredFields = ['name', 'industry', 'contact_name', 'contact_email', 'contact_phone', 'address', 'account_owner_id', 'status'];
+      const validationResult = validateCSVData(parsedData, requiredFields, 'clients');
       
       if (!validationResult.valid) {
-        setError(`Invalid CSV format: ${validationResult.errors.join(', ')}`);
+        setError(`CSV validation failed:\n${validationResult.errors.join('\n')}`);
         return;
       }
       
-      // Process and convert data types
-      const processedData = parsedData.map(item => ({
-        ...item,
-        account_owner_id: parseInt(item.account_owner_id as string, 10),
-        services_used: item.services_used ? 
-          (typeof item.services_used === 'string' ? 
-            item.services_used.split(';').map((id: string) => parseInt(id.trim(), 10)) : 
-            item.services_used) : 
-          []
-      }));
+      // Show warnings if any
+      if (validationResult.warnings.length > 0) {
+        console.warn('CSV Import Warnings:', validationResult.warnings);
+      }
+      
+      // Prepare data for import
+      const processedData = prepareDataForImport(parsedData, 'clients');
       
       // Create clients from CSV data
       for (const clientData of processedData) {
@@ -182,13 +193,39 @@ const Clients: React.FC = () => {
         services_used: client.services_used.join(';'),
         crm_link: client.crm_link || '',
         notes: client.notes || '',
-        status: client.status
+        status: client.status,
+        created_at: client.created_at,
+        updated_at: client.updated_at
       }));
       
       exportToCSV(dataToExport, 'clients_export.csv');
     } catch (err) {
       console.error('Error exporting clients:', err);
       setError('Failed to export clients.');
+    }
+  };
+
+  // Handler for export import template
+  const handleExportTemplate = () => {
+    try {
+      const templateData = [{
+        name: 'Example Client Corp',
+        industry: 'Technology',
+        contact_name: 'John Doe',
+        contact_email: 'john.doe@example.com',
+        contact_phone: '+1-555-0123',
+        address: '123 Business St, City, State 12345',
+        account_owner_id: 1,
+        services_used: '1;2',
+        crm_link: 'https://crm.example.com/client/123',
+        notes: 'Important client with high potential',
+        status: 'active'
+      }];
+      
+      exportForImport(templateData, 'clients_import_template.csv', 'clients');
+    } catch (err) {
+      console.error('Error exporting template:', err);
+      setError('Failed to export template.');
     }
   };
 
@@ -201,7 +238,7 @@ const Clients: React.FC = () => {
         setLoadingAccountOwners(true);
         
         // Fetch clients
-      try {
+        try {
           const response = await clientService.getAllClients();
           
           // Log the response for debugging
@@ -223,12 +260,12 @@ const Clients: React.FC = () => {
           
           setClients(data);
           setError(null);
-      } catch (err) {
-        console.error('Error fetching clients:', err);
-        setError('Failed to load clients. Please try again.');
-      } finally {
-        setLoading(false);
-      }
+        } catch (err) {
+          console.error('Error fetching clients:', err);
+          setError('Failed to load clients. Please try again.');
+        } finally {
+          setLoading(false);
+        }
         
         // Fetch services
         try {
@@ -423,9 +460,9 @@ const Clients: React.FC = () => {
           // Delete with force=true if user confirmed
           const forceResult = await clientService.deleteClient(id, true);
           if (forceResult.success) {
-      // Update local state
-      setClients(clients.filter(c => c.id !== id));
-      setError(null);
+            // Update local state
+            setClients(clients.filter(c => c.id !== id));
+            setError(null);
           } else {
             setError('Failed to delete client and its opportunities. Please try again.');
           }
@@ -541,14 +578,13 @@ const Clients: React.FC = () => {
 
   return (
     <Box>
-      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 3 }}>
+<Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 3 }}>
         <Typography variant="h4">Clients</Typography>
-        <Box sx={{ display: 'flex' }}>
+        <Box sx={{ display: 'flex', gap: 1 }}>
           <Button 
             variant="outlined" 
             startIcon={<FileUploadIcon />}
             onClick={handleImportClick}
-            sx={{ mr: 1 }}
           >
             Import CSV
           </Button>
@@ -556,9 +592,20 @@ const Clients: React.FC = () => {
             variant="outlined" 
             startIcon={<FileDownloadIcon />}
             onClick={handleExportClick}
-            sx={{ mr: 1 }}
           >
             Export CSV
+          </Button>
+          <Button 
+            variant="outlined" 
+            onClick={handleExportTemplate}
+          >
+            Import Template
+          </Button>
+          <Button 
+            variant="outlined" 
+            onClick={() => setShowFormatHelper(true)}
+          >
+            CSV Format Help
           </Button>
         <Button 
           variant="contained" 
@@ -604,91 +651,91 @@ const Clients: React.FC = () => {
           </Typography>
         </Paper>
       ) : (
-      <TableContainer component={Paper}>
-        <Table>
-          <TableHead>
-            <TableRow>
-              <TableCell>
-                <TableSortLabel
-                  active={sortConfig.field === 'name'}
-                  direction={sortConfig.field === 'name' ? sortConfig.direction : 'asc'}
-                  onClick={() => handleSort('name')}
-                >
-                  Name
-                </TableSortLabel>
-              </TableCell>
-              <TableCell>
-                <TableSortLabel
-                  active={sortConfig.field === 'industry'}
-                  direction={sortConfig.field === 'industry' ? sortConfig.direction : 'asc'}
-                  onClick={() => handleSort('industry')}
-                >
-                  Industry
-                </TableSortLabel>
-              </TableCell>
-              <TableCell>
-                <TableSortLabel
-                  active={sortConfig.field === 'account_owner_id'}
-                  direction={sortConfig.field === 'account_owner_id' ? sortConfig.direction : 'asc'}
-                  onClick={() => handleSort('account_owner_id')}
-                >
-                  Account Owner
-                </TableSortLabel>
-              </TableCell>
-              <TableCell>
-                <TableSortLabel
-                  active={sortConfig.field === 'services_used'}
-                  direction={sortConfig.field === 'services_used' ? sortConfig.direction : 'asc'}
-                  onClick={() => handleSort('services_used')}
-                >
-                  Services Used
-                </TableSortLabel>
-              </TableCell>
-              <TableCell>Status</TableCell>
-              <TableCell align="right">Actions</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {filteredAndSortedClients.map((client) => (
-              <TableRow key={client.id}>
+        <TableContainer component={Paper}>
+          <Table>
+            <TableHead>
+              <TableRow>
                 <TableCell>
-                  <Stack direction="row" alignItems="center" spacing={1}>
-                    <BusinessIcon color="primary" fontSize="small" />
-                    <div>
-                      <Typography variant="body1">{client.name}</Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        {client.contact_name}
-                      </Typography>
-                    </div>
-                  </Stack>
-                </TableCell>
-                <TableCell>{client.industry}</TableCell>
-                <TableCell>{getAccountOwnerName(client.account_owner_id)}</TableCell>
-                <TableCell>
-                  {client.services_used.length > 0 
-                    ? getServiceNames(client.services_used).join(', ')
-                    : <Typography variant="caption" color="text.secondary">No services</Typography>}
+                  <TableSortLabel
+                    active={sortConfig.field === 'name'}
+                    direction={sortConfig.field === 'name' ? sortConfig.direction : 'asc'}
+                    onClick={() => handleSort('name')}
+                  >
+                    Name
+                  </TableSortLabel>
                 </TableCell>
                 <TableCell>
-                  <Chip 
-                    label={client.status} 
-                    color={getStatusColor(client.status) as any}
-                    size="small"
-                  />
+                  <TableSortLabel
+                    active={sortConfig.field === 'industry'}
+                    direction={sortConfig.field === 'industry' ? sortConfig.direction : 'asc'}
+                    onClick={() => handleSort('industry')}
+                  >
+                    Industry
+                  </TableSortLabel>
                 </TableCell>
-                <TableCell align="right">
-                  <IconButton onClick={() => handleOpenDialog(client)} size="small">
-                    <EditIcon />
-                  </IconButton>
-                  <IconButton onClick={() => handleDelete(client.id)} size="small" color="error">
-                    <DeleteIcon />
-                  </IconButton>
+                <TableCell>
+                  <TableSortLabel
+                    active={sortConfig.field === 'account_owner_id'}
+                    direction={sortConfig.field === 'account_owner_id' ? sortConfig.direction : 'asc'}
+                    onClick={() => handleSort('account_owner_id')}
+                  >
+                    Account Owner
+                  </TableSortLabel>
                 </TableCell>
+                <TableCell>
+                  <TableSortLabel
+                    active={sortConfig.field === 'services_used'}
+                    direction={sortConfig.field === 'services_used' ? sortConfig.direction : 'asc'}
+                    onClick={() => handleSort('services_used')}
+                  >
+                    Services Used
+                  </TableSortLabel>
+                </TableCell>
+                <TableCell>Status</TableCell>
+                <TableCell align="right">Actions</TableCell>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </TableContainer>
+            </TableHead>
+            <TableBody>
+              {filteredAndSortedClients.map((client) => (
+                <TableRow key={client.id}>
+                  <TableCell>
+                    <Stack direction="row" alignItems="center" spacing={1}>
+                      <BusinessIcon color="primary" fontSize="small" />
+                      <div>
+                        <Typography variant="body1">{client.name}</Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {client.contact_name}
+                        </Typography>
+                      </div>
+                    </Stack>
+                  </TableCell>
+                  <TableCell>{client.industry}</TableCell>
+                  <TableCell>{getAccountOwnerName(client.account_owner_id)}</TableCell>
+                  <TableCell>
+                    {client.services_used.length > 0 
+                      ? getServiceNames(client.services_used).join(', ')
+                      : <Typography variant="caption" color="text.secondary">No services</Typography>}
+                  </TableCell>
+                  <TableCell>
+                    <Chip 
+                      label={client.status} 
+                      color={getStatusColor(client.status) as any}
+                      size="small"
+                    />
+                  </TableCell>
+                  <TableCell align="right">
+                    <IconButton onClick={() => handleOpenDialog(client)} size="small">
+                      <EditIcon />
+                    </IconButton>
+                    <IconButton onClick={() => handleDelete(client.id)} size="small" color="error">
+                      <DeleteIcon />
+                    </IconButton>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
       )}
 
       {/* Add/Edit Client Dialog */}
@@ -720,6 +767,7 @@ const Clients: React.FC = () => {
             </FormControl>
             <TextField
               margin="normal"
+              required
               fullWidth
               label="Contact Name"
               name="contact_name"
@@ -728,6 +776,7 @@ const Clients: React.FC = () => {
             />
             <TextField
               margin="normal"
+              required
               fullWidth
               label="Contact Email"
               name="contact_email"
@@ -737,6 +786,7 @@ const Clients: React.FC = () => {
             />
             <TextField
               margin="normal"
+              required
               fullWidth
               label="Contact Phone"
               name="contact_phone"
@@ -745,12 +795,9 @@ const Clients: React.FC = () => {
             />
             <TextField
               margin="normal"
-              required
               fullWidth
               label="Address"
               name="address"
-              multiline
-              rows={2}
               value={formData.address}
               onChange={handleInputChange}
             />
@@ -760,12 +807,7 @@ const Clients: React.FC = () => {
                 name="account_owner_id"
                 value={formData.account_owner_id.toString()}
                 label="Account Owner"
-                onChange={(e) => {
-                  setFormData({
-                    ...formData,
-                    account_owner_id: parseInt(e.target.value, 10)
-                  });
-                }}
+                onChange={handleSelectChange}
               >
                 <MenuItem value="0">Select Account Owner</MenuItem>
                 {accountOwners.map((owner) => (
@@ -779,7 +821,9 @@ const Clients: React.FC = () => {
                 options={services}
                 getOptionLabel={(option) => option.name}
                 isOptionEqualToValue={(option, value) => option.id === value.id}
-                value={services.filter(service => formData.services_used.includes(service.id))}
+                value={services.filter(service => 
+                  formData.services_used.includes(service.id)
+                )}
                 onChange={handleServicesChange}
                 renderInput={(params) => (
                   <TextField
@@ -787,14 +831,6 @@ const Clients: React.FC = () => {
                     label="Services Used"
                     placeholder="Select services"
                   />
-                )}
-                renderOption={(props, option) => (
-                  <li {...props}>
-                    <Typography variant="body2">{option.name}</Typography>
-                    <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
-                      ({option.business_unit})
-                    </Typography>
-                  </li>
                 )}
               />
             </FormControl>
@@ -838,7 +874,11 @@ const Clients: React.FC = () => {
             variant="contained"
             disabled={submitting}
           >
-            {submitting ? <CircularProgress size={24} /> : currentClient ? 'Update' : 'Add'}
+            {submitting ? (
+              <CircularProgress size={24} color="inherit" />
+            ) : (
+              currentClient ? 'Update' : 'Add'
+            )}
           </Button>
         </DialogActions>
       </Dialog>
@@ -846,10 +886,17 @@ const Clients: React.FC = () => {
       {/* Hidden file input for CSV import */}
       <input
         type="file"
-        accept=".csv"
         ref={fileInputRef}
         style={{ display: 'none' }}
+        accept=".csv"
         onChange={handleFileChange}
+      />
+
+      {/* CSV Format Helper Dialog */}
+      <CSVFormatHelper
+        open={showFormatHelper}
+        onClose={() => setShowFormatHelper(false)}
+        type="clients"
       />
     </Box>
   );

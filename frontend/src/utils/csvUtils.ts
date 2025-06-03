@@ -8,15 +8,21 @@
  * Convert an array of objects to CSV format
  * @param data Array of objects to convert to CSV
  * @param headers Optional custom headers (if not provided, will use object keys)
+ * @param excludeFields Fields to exclude from export (like 'id' for import templates)
  * @returns CSV string
  */
-export const convertToCSV = (data: any[], headers?: string[]): string => {
+export const convertToCSV = (data: any[], headers?: string[], excludeFields?: string[]): string => {
   if (data.length === 0) {
     return '';
   }
 
   // If headers are not provided, use the keys from the first object
-  const csvHeaders = headers || Object.keys(data[0]);
+  let csvHeaders = headers || Object.keys(data[0]);
+  
+  // Exclude specified fields
+  if (excludeFields) {
+    csvHeaders = csvHeaders.filter(header => !excludeFields.includes(header));
+  }
   
   // Create the header row
   let csvString = csvHeaders.join(',') + '\n';
@@ -38,6 +44,9 @@ export const convertToCSV = (data: any[], headers?: string[]): string => {
       } else if (Array.isArray(value)) {
         // Convert arrays to semicolon-separated strings
         return `"${value.join(';')}"`;
+      } else if (value instanceof Date) {
+        // Format dates as YYYY-MM-DD
+        return value.toISOString().split('T')[0];
       } else {
         // Convert other types to string
         return String(value);
@@ -55,10 +64,11 @@ export const convertToCSV = (data: any[], headers?: string[]): string => {
  * @param data Array of objects to export
  * @param filename Name of the file to download
  * @param headers Optional custom headers
+ * @param excludeFields Fields to exclude from export
  */
-export const exportToCSV = (data: any[], filename: string, headers?: string[]): void => {
+export const exportToCSV = (data: any[], filename: string, headers?: string[], excludeFields?: string[]): void => {
   // Convert data to CSV format
-  const csvContent = convertToCSV(data, headers);
+  const csvContent = convertToCSV(data, headers, excludeFields);
   
   // Create a Blob with the CSV content
   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -83,6 +93,23 @@ export const exportToCSV = (data: any[], filename: string, headers?: string[]): 
   // Clean up
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
+};
+
+/**
+ * Export data for import template (excludes ID and other system fields)
+ * @param data Array of objects to export
+ * @param filename Name of the file to download
+ * @param type Type of data being exported
+ */
+export const exportForImport = (data: any[], filename: string, type: 'clients' | 'services' | 'opportunities'): void => {
+  // Define fields to exclude for each type
+  const excludeFields = {
+    clients: ['id', 'created_at', 'updated_at'],
+    services: ['id', 'created_at', 'updated_at'],
+    opportunities: ['id', 'created_at', 'updated_at', 'client_name', 'service_name', 'service_business_unit', 'assigned_user_name']
+  };
+
+  exportToCSV(data, filename, undefined, excludeFields[type]);
 };
 
 /**
@@ -135,7 +162,7 @@ export const parseCSVText = (csvText: string): any[] => {
     
     // Skip rows with incorrect number of values
     if (values.length !== headers.length) {
-      console.warn(`Skipping row ${i+1}: incorrect number of values`);
+      console.warn(`Skipping row ${i+1}: incorrect number of values (expected ${headers.length}, got ${values.length})`);
       continue;
     }
     
@@ -145,14 +172,17 @@ export const parseCSVText = (csvText: string): any[] => {
       let value = values[index];
       
       // Try to convert to appropriate types
-      if (value === '') {
+      if (value === '' || value === null || value === undefined) {
         obj[header] = null;
       } else if (value.includes(';')) {
         // Convert semicolon-separated strings back to arrays
-        obj[header] = value.split(';').map(v => v.trim());
-      } else if (!isNaN(Number(value)) && value.trim() !== '') {
-        // Convert numeric strings to numbers
+        obj[header] = value.split(';').map(v => v.trim()).filter(v => v !== '');
+      } else if (!isNaN(Number(value)) && value.trim() !== '' && !header.toLowerCase().includes('phone')) {
+        // Convert numeric strings to numbers (but not phone numbers)
         obj[header] = Number(value);
+      } else if (header.toLowerCase().includes('date') && value.match(/^\d{4}-\d{2}-\d{2}$/)) {
+        // Keep date strings as-is if they're in YYYY-MM-DD format
+        obj[header] = value;
       } else {
         obj[header] = value;
       }
@@ -207,40 +237,185 @@ const parseCSVRow = (row: string): string[] => {
  * Validate CSV data against required fields
  * @param data Array of objects to validate
  * @param requiredFields Array of field names that must be present
+ * @param type Type of data for specific validation rules
  * @returns Object with validation results
  */
-export const validateCSVData = (data: any[], requiredFields: string[]): { valid: boolean; errors: string[] } => {
+export const validateCSVData = (
+  data: any[], 
+  requiredFields: string[], 
+  type?: 'clients' | 'services' | 'opportunities'
+): { valid: boolean; errors: string[]; warnings: string[] } => {
   const errors: string[] = [];
+  const warnings: string[] = [];
   
   // Check if data is empty
   if (data.length === 0) {
     errors.push('CSV file contains no data');
-    return { valid: false, errors };
+    return { valid: false, errors, warnings };
   }
   
-  // Check for required fields
+  // Check for required fields in headers
+  const headers = Object.keys(data[0]);
   for (const field of requiredFields) {
-    if (!(field in data[0])) {
-      errors.push(`Required field "${field}" is missing`);
+    if (!headers.includes(field)) {
+      errors.push(`Required field "${field}" is missing from CSV headers`);
     }
   }
   
-  // If there are missing fields, return early
+  // Check for ID field (should not be present for imports)
+  if (headers.includes('id')) {
+    warnings.push('ID field detected in CSV. This will be ignored during import as IDs are auto-generated.');
+  }
+  
+  // If there are missing required fields, return early
   if (errors.length > 0) {
-    return { valid: false, errors };
+    return { valid: false, errors, warnings };
   }
   
   // Validate each row
   data.forEach((row, index) => {
+    const rowNumber = index + 1;
+    
+    // Check required fields are not empty
     requiredFields.forEach(field => {
-      if (row[field] === null || row[field] === undefined || row[field] === '') {
-        errors.push(`Row ${index + 1}: Required field "${field}" is empty`);
+      const value = row[field];
+      if (value === null || value === undefined || value === '' || 
+          (Array.isArray(value) && value.length === 0)) {
+        errors.push(`Row ${rowNumber}: Required field "${field}" is empty`);
       }
     });
+    
+    // Type-specific validations
+    if (type === 'clients') {
+      // Validate email format
+      if (row.contact_email && !isValidEmail(row.contact_email)) {
+        errors.push(`Row ${rowNumber}: Invalid email format for contact_email`);
+      }
+      
+      // Validate account_owner_id is a number
+      if (row.account_owner_id && isNaN(Number(row.account_owner_id))) {
+        errors.push(`Row ${rowNumber}: account_owner_id must be a number`);
+      }
+      
+      // Validate status
+      const validStatuses = ['active', 'inactive', 'prospect'];
+      if (row.status && !validStatuses.includes(row.status)) {
+        errors.push(`Row ${rowNumber}: Invalid status. Must be one of: ${validStatuses.join(', ')}`);
+      }
+    } else if (type === 'services') {
+      // Validate status
+      const validStatuses = ['active', 'inactive', 'deprecated'];
+      if (row.status && !validStatuses.includes(row.status)) {
+        errors.push(`Row ${rowNumber}: Invalid status. Must be one of: ${validStatuses.join(', ')}`);
+      }
+      
+      // Validate pricing_model
+      const validPricingModels = ['Fixed Price', 'Hourly Rate', 'Retainer', 'Project-based', 'Commission', 'Value-based'];
+      if (row.pricing_model && !validPricingModels.includes(row.pricing_model)) {
+        warnings.push(`Row ${rowNumber}: Pricing model "${row.pricing_model}" is not in the standard list`);
+      }
+    } else if (type === 'opportunities') {
+      // Validate IDs are numbers
+      ['client_id', 'service_id', 'assigned_user_id'].forEach(field => {
+        if (row[field] && isNaN(Number(row[field]))) {
+          errors.push(`Row ${rowNumber}: ${field} must be a number`);
+        }
+      });
+      
+      // Validate estimated_value is a number
+      if (row.estimated_value && isNaN(Number(row.estimated_value))) {
+        errors.push(`Row ${rowNumber}: estimated_value must be a number`);
+      }
+      
+      // Validate date format
+      if (row.due_date && !row.due_date.match(/^\d{4}-\d{2}-\d{2}$/)) {
+        errors.push(`Row ${rowNumber}: due_date must be in YYYY-MM-DD format`);
+      }
+      
+      // Validate status
+      const validStatuses = ['new', 'in_progress', 'qualified', 'proposal', 'negotiation', 'won', 'lost', 'on_hold'];
+      if (row.status && !validStatuses.includes(row.status)) {
+        errors.push(`Row ${rowNumber}: Invalid status. Must be one of: ${validStatuses.join(', ')}`);
+      }
+      
+      // Validate priority
+      const validPriorities = ['low', 'medium', 'high', 'critical'];
+      if (row.priority && !validPriorities.includes(row.priority)) {
+        errors.push(`Row ${rowNumber}: Invalid priority. Must be one of: ${validPriorities.join(', ')}`);
+      }
+    }
   });
   
   return {
     valid: errors.length === 0,
-    errors
+    errors,
+    warnings
   };
+};
+
+/**
+ * Helper function to validate email format
+ */
+const isValidEmail = (email: string): boolean => {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return emailRegex.test(email);
+};
+
+/**
+ * Prepare data for import by cleaning and transforming fields
+ * @param data Raw CSV data
+ * @param type Type of data being imported
+ * @returns Cleaned data ready for import
+ */
+export const prepareDataForImport = (data: any[], type: 'clients' | 'services' | 'opportunities'): any[] => {
+  return data.map(item => {
+    // Remove system fields that shouldn't be imported
+    const cleaned = { ...item };
+    delete cleaned.id;
+    delete cleaned.created_at;
+    delete cleaned.updated_at;
+    
+    // Type-specific cleaning
+    if (type === 'clients') {
+      // Ensure services_used is an array of numbers
+      if (cleaned.services_used) {
+        if (typeof cleaned.services_used === 'string') {
+          cleaned.services_used = cleaned.services_used.split(';').map((id: string) => parseInt(id.trim(), 10)).filter((id: number) => !isNaN(id));
+        } else if (Array.isArray(cleaned.services_used)) {
+          cleaned.services_used = cleaned.services_used.map((id: any) => parseInt(String(id), 10)).filter((id: number) => !isNaN(id));
+        }
+      } else {
+        cleaned.services_used = [];
+      }
+      
+      // Ensure account_owner_id is a number
+      if (cleaned.account_owner_id) {
+        cleaned.account_owner_id = parseInt(String(cleaned.account_owner_id), 10);
+      }
+    } else if (type === 'services') {
+      // Ensure applicable_industries is an array
+      if (cleaned.applicable_industries) {
+        if (typeof cleaned.applicable_industries === 'string') {
+          cleaned.applicable_industries = cleaned.applicable_industries.split(';').map((industry: string) => industry.trim()).filter((industry: string) => industry !== '');
+        }
+      } else {
+        cleaned.applicable_industries = [];
+      }
+    } else if (type === 'opportunities') {
+      // Remove display fields that shouldn't be imported
+      delete cleaned.client_name;
+      delete cleaned.service_name;
+      delete cleaned.service_business_unit;
+      delete cleaned.assigned_user_name;
+      
+      // Ensure numeric fields are numbers
+      ['client_id', 'service_id', 'assigned_user_id', 'estimated_value'].forEach(field => {
+        if (cleaned[field]) {
+          cleaned[field] = Number(cleaned[field]);
+        }
+      });
+    }
+    
+    return cleaned;
+  });
 };

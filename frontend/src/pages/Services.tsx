@@ -35,7 +35,8 @@ import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import serviceService, { Service, ServiceInput } from '../services/serviceService';
 import businessUnitService, { BusinessUnit } from '../services/businessUnitService';
 import industryService, { Industry } from '../services/industryService';
-import { exportToCSV, parseCSVFile, validateCSVData } from '../utils/csvUtils';
+import { exportToCSV, parseCSVFile, validateCSVData, prepareDataForImport, exportForImport } from '../utils/csvUtils';
+import CSVFormatHelper from '../components/CSVFormatHelper';
 
 // Pricing models for dropdown
 const pricingModels = [
@@ -60,6 +61,7 @@ const Services: React.FC = () => {
   const [openDialog, setOpenDialog] = useState(false);
   const [currentService, setCurrentService] = useState<Service | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [showFormatHelper, setShowFormatHelper] = useState(false);
   const [formData, setFormData] = useState<ServiceInput>({
     name: '',
     description: '',
@@ -322,30 +324,28 @@ const Services: React.FC = () => {
       setLoading(true);
       const parsedData = await parseCSVFile(file);
       
-      // Validate required fields - only name is mandatory
-      const requiredFields = ['name'];
-      const validationResult = validateCSVData(parsedData, requiredFields);
+      // Validate the CSV data
+      const requiredFields = ['name', 'description', 'business_unit', 'pricing_model', 'client_role', 'status'];
+      const validationResult = validateCSVData(parsedData, requiredFields, 'services');
       
       if (!validationResult.valid) {
-        setError(`Invalid CSV data: ${validationResult.errors.join(', ')}`);
+        setError(`CSV validation failed:\n${validationResult.errors.join('\n')}`);
         return;
       }
       
+      // Show warnings if any
+      if (validationResult.warnings.length > 0) {
+        console.warn('CSV Import Warnings:', validationResult.warnings);
+      }
+      
+      // Prepare data for import
+      const processedData = prepareDataForImport(parsedData, 'services');
+      
       // Process and create services
       const createdServices = [];
-      for (const item of parsedData) {
+      for (const serviceData of processedData) {
         try {
-          // Process applicable_industries (convert from string if needed)
-          const serviceData: ServiceInput = {
-            ...item,
-            applicable_industries: item.applicable_industries ? 
-              (typeof item.applicable_industries === 'string' ? 
-                item.applicable_industries.split(';').map((industry: string) => industry.trim()) : 
-                item.applicable_industries) : 
-              []
-          };
-          
-          const newService = await serviceService.createService(serviceData);
+          const newService = await serviceService.createService(serviceData as ServiceInput);
           createdServices.push(newService);
         } catch (err) {
           console.error('Error creating service:', err);
@@ -379,10 +379,33 @@ const Services: React.FC = () => {
       pricing_details: service.pricing_details,
       applicable_industries: service.applicable_industries.join(';'),
       client_role: service.client_role,
-      status: service.status
+      status: service.status,
+      created_at: service.created_at,
+      updated_at: service.updated_at
     }));
     
-    exportToCSV(dataToExport, 'services');
+    exportToCSV(dataToExport, 'services_export.csv');
+  };
+
+  // Handler for export import template
+  const handleExportTemplate = () => {
+    try {
+      const templateData = [{
+        name: 'Digital Marketing Strategy',
+        description: 'Comprehensive digital marketing planning and execution',
+        business_unit: 'Digital Marketing',
+        pricing_model: 'Project-based',
+        pricing_details: '$5,000 - $15,000 per project',
+        applicable_industries: 'Technology;Healthcare;Finance',
+        client_role: 'CMO',
+        status: 'active'
+      }];
+      
+      exportForImport(templateData, 'services_import_template.csv', 'services');
+    } catch (err) {
+      console.error('Error exporting template:', err);
+      setError('Failed to export template.');
+    }
   };
 
   return (
@@ -401,12 +424,11 @@ const Services: React.FC = () => {
           
       <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 3 }}>
         <Typography variant="h4">Services</Typography>
-            <Box>
+            <Box sx={{ display: 'flex', gap: 1 }}>
               <Button 
                 variant="outlined" 
                 startIcon={<FileUploadIcon />}
                 onClick={handleImportClick}
-                sx={{ mr: 1 }}
               >
                 Import CSV
               </Button>
@@ -414,9 +436,20 @@ const Services: React.FC = () => {
                 variant="outlined" 
                 startIcon={<FileDownloadIcon />}
                 onClick={handleExportClick}
-                sx={{ mr: 1 }}
               >
                 Export CSV
+              </Button>
+              <Button 
+                variant="outlined" 
+                onClick={handleExportTemplate}
+              >
+                Import Template
+              </Button>
+              <Button 
+                variant="outlined" 
+                onClick={() => setShowFormatHelper(true)}
+              >
+                CSV Format Help
               </Button>
         <Button 
           variant="contained" 
@@ -627,6 +660,13 @@ const Services: React.FC = () => {
         style={{ display: 'none' }}
         accept=".csv"
         onChange={handleFileChange}
+      />
+
+      {/* CSV Format Helper Dialog */}
+      <CSVFormatHelper
+        open={showFormatHelper}
+        onClose={() => setShowFormatHelper(false)}
+        type="services"
       />
     </Box>
   );

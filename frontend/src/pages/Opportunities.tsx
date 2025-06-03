@@ -43,7 +43,8 @@ import clientService, { Client } from '../services/clientService';
 import serviceService, { Service } from '../services/serviceService';
 import userService from '../services/userService';
 import { User } from '../services/authService';
-import { exportToCSV, parseCSVFile, validateCSVData } from '../utils/csvUtils';
+import { exportToCSV, parseCSVFile, validateCSVData, prepareDataForImport, exportForImport } from '../utils/csvUtils';
+import CSVFormatHelper from '../components/CSVFormatHelper';
 
 // Status options
 const statusOptions = [
@@ -121,6 +122,7 @@ const Opportunities: React.FC = () => {
     notes: ''
   });
   const [error, setError] = useState<string | null>(null);
+  const [showFormatHelper, setShowFormatHelper] = useState(false);
 
   useEffect(() => {
     fetchOpportunities();
@@ -571,30 +573,26 @@ const Opportunities: React.FC = () => {
       // Parse CSV file
       const parsedData = await parseCSVFile(file);
       
-      // Validate required fields - only name is mandatory
-      const requiredFields = ['name'];
-      const validationResult = validateCSVData(parsedData, requiredFields);
+      // Validate the CSV data
+      const requiredFields = ['name', 'client_id', 'service_id', 'assigned_user_id', 'status', 'priority', 'estimated_value', 'due_date'];
+      const validationResult = validateCSVData(parsedData, requiredFields, 'opportunities');
       
       if (!validationResult.valid) {
-        setError(`CSV validation failed: ${validationResult.errors.join(', ')}`);
+        setError(`CSV validation failed:\n${validationResult.errors.join('\n')}`);
         return;
       }
       
+      // Show warnings if any
+      if (validationResult.warnings.length > 0) {
+        console.warn('CSV Import Warnings:', validationResult.warnings);
+      }
+      
+      // Prepare data for import
+      const processedData = prepareDataForImport(parsedData, 'opportunities');
+      
       // Process and create opportunities
-      for (const item of parsedData) {
-        const opportunityData: OpportunityInput = {
-          name: item.name as string,
-          client_id: parseInt(item.client_id as string, 10),
-          service_id: parseInt(item.service_id as string, 10),
-          assigned_user_id: parseInt(item.assigned_user_id as string, 10),
-          status: item.status as string,
-          priority: (item.priority as string) || 'medium',
-          estimated_value: item.estimated_value ? parseFloat(item.estimated_value as string) : 0,
-          due_date: (item.due_date as string) || '',
-          notes: (item.notes as string) || ''
-        };
-        
-        await opportunityService.createOpportunity(opportunityData);
+      for (const opportunityData of processedData) {
+        await opportunityService.createOpportunity(opportunityData as OpportunityInput);
       }
       
       // Refresh opportunities list
@@ -633,10 +631,32 @@ const Opportunities: React.FC = () => {
       }));
       
       // Export to CSV
-      exportToCSV(exportData, 'opportunities.csv');
+      exportToCSV(exportData, 'opportunities_export.csv');
     } catch (err) {
       console.error('Error exporting opportunities:', err);
       setError('Failed to export opportunities. Please try again.');
+    }
+  };
+
+  // Handler for export import template
+  const handleExportTemplate = () => {
+    try {
+      const templateData = [{
+        name: 'Q1 Marketing Campaign',
+        client_id: 1,
+        service_id: 1,
+        assigned_user_id: 1,
+        status: 'new',
+        priority: 'high',
+        estimated_value: 10000,
+        due_date: '2024-03-31',
+        notes: 'High priority opportunity for Q1'
+      }];
+      
+      exportForImport(templateData, 'opportunities_import_template.csv', 'opportunities');
+    } catch (err) {
+      console.error('Error exporting template:', err);
+      setError('Failed to export template.');
     }
   };
 
@@ -652,7 +672,7 @@ const Opportunities: React.FC = () => {
     <Box>
       <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 3 }}>
         <Typography variant="h4">Opportunities</Typography>
-        <Box sx={{ display: 'flex', gap: 2 }}>
+        <Box sx={{ display: 'flex', gap: 1 }}>
           <Button 
             variant="outlined" 
             startIcon={<FileUploadIcon />}
@@ -666,6 +686,18 @@ const Opportunities: React.FC = () => {
             onClick={handleExportClick}
           >
             Export CSV
+          </Button>
+          <Button 
+            variant="outlined" 
+            onClick={handleExportTemplate}
+          >
+            Import Template
+          </Button>
+          <Button 
+            variant="outlined" 
+            onClick={() => setShowFormatHelper(true)}
+          >
+            CSV Format Help
           </Button>
         <Button 
           variant="contained" 
@@ -702,6 +734,13 @@ const Opportunities: React.FC = () => {
         accept=".csv"
         style={{ display: 'none' }}
         onChange={handleFileChange}
+      />
+
+      {/* CSV Format Helper Dialog */}
+      <CSVFormatHelper
+        open={showFormatHelper}
+        onClose={() => setShowFormatHelper(false)}
+        type="opportunities"
       />
 
       {error && (

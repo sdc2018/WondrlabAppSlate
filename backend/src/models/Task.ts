@@ -127,19 +127,18 @@ export class TaskModel {
     const query = `
       SELECT t.*, o.name as opportunity_name, c.name as client_name, s.name as service_name,
              u.email as assigned_user_email, u.username as assigned_user_name,
-             bu.email as bu_head_email, bu.username as bu_head_name
+             s.business_unit
       FROM tasks t
       JOIN opportunities o ON t.opportunity_id = o.id
       JOIN clients c ON o.client_id = c.id
       JOIN services s ON o.service_id = s.id
       JOIN users u ON t.assigned_user_id = u.id
-      LEFT JOIN users bu ON bu.role = $1 AND bu.business_unit = s.business_unit
-      WHERE t.status != $2 AND t.due_date < NOW()
+      WHERE t.status != $1 AND t.due_date < NOW()
       ORDER BY t.due_date ASC
     `;
     
     try {
-      const result = await this.pool.query(query, [UserRole.BU_HEAD, TaskStatus.COMPLETED]);
+      const result = await this.pool.query(query, [TaskStatus.COMPLETED]);
       return result.rows;
     } catch (error) {
       console.error('Error finding overdue tasks:', error);
