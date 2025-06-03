@@ -138,8 +138,8 @@ const Clients: React.FC = () => {
       
       const parsedData = await parseCSVFile(file);
       
-      // Validate the CSV data - only truly essential fields are required
-      const requiredFields = ['name', 'industry', 'contact_name', 'contact_email', 'account_owner_id', 'status'];
+      // Validate the CSV data - account_owner_id is now optional (will default to admin)
+      const requiredFields = ['name', 'industry', 'contact_name', 'contact_email', 'status'];
       const validationResult = validateCSVData(parsedData, requiredFields, 'clients');
       
       if (!validationResult.valid) {
@@ -156,8 +156,14 @@ const Clients: React.FC = () => {
       const processedData = prepareDataForImport(parsedData, 'clients');
       
       // Create clients from CSV data
-      for (const clientData of processedData) {
+      for (let i = 0; i < processedData.length; i++) {
+        const clientData = processedData[i];
+        try {
         await clientService.createClient(clientData as ClientInput);
+        } catch (clientErr) {
+          console.error(`Error creating client at row ${i + 2}:`, clientErr);
+          throw new Error(`Failed to create client at row ${i + 2}: ${clientErr instanceof Error ? clientErr.message : String(clientErr)}`);
+        }
       }
       
       // Refresh client list
@@ -171,7 +177,18 @@ const Clients: React.FC = () => {
       
     } catch (err) {
       console.error('Error importing clients:', err);
-      setError('Failed to import clients. Please check your CSV file format.');
+      
+      // Show more detailed error information
+      let errorMessage = 'Failed to import clients. ';
+      if (err instanceof Error) {
+        errorMessage += `Error: ${err.message}`;
+      } else if (typeof err === 'string') {
+        errorMessage += err;
+      } else {
+        errorMessage += 'Please check your CSV file format and try again.';
+      }
+      
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -215,7 +232,7 @@ const Clients: React.FC = () => {
         contact_email: 'john.doe@example.com',
         contact_phone: '+1-555-0123',
         address: '123 Business St, City, State 12345',
-        account_owner_id: 1,
+        account_owner_id: '',
         services_used: '',
         crm_link: '',
         notes: '',
