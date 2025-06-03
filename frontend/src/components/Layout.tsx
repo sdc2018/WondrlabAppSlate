@@ -263,7 +263,7 @@ const Layout: React.FC = () => {
           ml: { sm: `${drawerWidth}px` },
         }}
       >
-        <Toolbar>
+        <Toolbar sx={{ minHeight: '48px !important' }}>
           <IconButton
             color="inherit"
             aria-label="open drawer"
@@ -356,7 +356,7 @@ const Layout: React.FC = () => {
         component="main"
         sx={{ flexGrow: 1, p: 3, width: { sm: `calc(100% - ${drawerWidth}px)` } }}
       >
-        <Toolbar />
+        <Toolbar sx={{ minHeight: '48px !important' }} />
         <Outlet />
       </Box>
     </Box>
