@@ -28,7 +28,7 @@ import { exportToCSV } from '../utils/csvUtils';
 interface CSVFormatHelperProps {
   open: boolean;
   onClose: () => void;
-  type: 'clients' | 'services' | 'opportunities';
+  type: 'clients' | 'services' | 'opportunities' | 'tasks';
 }
 
 interface TabPanelProps {
@@ -65,7 +65,7 @@ const CSVFormatHelper: React.FC<CSVFormatHelperProps> = ({ open, onClose, type }
   };
 
   const downloadTemplate = () => {
-    const templates = {
+    const templates: Record<'clients' | 'services' | 'opportunities' | 'tasks', any[]> = {
       clients: [
         {
           name: 'Example Client Corp',
@@ -104,6 +104,16 @@ const CSVFormatHelper: React.FC<CSVFormatHelperProps> = ({ open, onClose, type }
           estimated_value: 10000,
           due_date: '2024-03-31',
           notes: 'High priority opportunity for Q1'
+        }
+      ],
+      tasks: [
+        {
+          name: 'Review Marketing Proposal',
+          opportunity_name: 'Q1 Marketing Campaign',
+          assigned_user_name: 'admin',
+          due_date: '2024-02-15',
+          status: 'pending',
+          description: 'Review and approve the marketing proposal for Q1 campaign'
         }
       ]
     };
@@ -166,6 +176,21 @@ const CSVFormatHelper: React.FC<CSVFormatHelperProps> = ({ open, onClose, type }
             { name: 'estimated_value', type: 'Number', description: 'Estimated value in dollars', example: '10000' },
             { name: 'due_date', type: 'Date', description: 'Due date (YYYY-MM-DD)', example: '2024-03-31' },
             { name: 'notes', type: 'Text', description: 'Additional notes', example: 'High priority opportunity' }
+          ]
+        };
+      case 'tasks':
+        return {
+          title: 'Tasks CSV Format',
+          description: 'Import format for task data. Use opportunity names and usernames for easier imports - the system will automatically resolve them to IDs.',
+          required: ['name'],
+          optional: ['opportunity_name', 'assigned_user_name', 'due_date', 'status', 'description'],
+          fields: [
+            { name: 'name', type: 'Text', description: 'Task name', example: 'Review Marketing Proposal' },
+            { name: 'opportunity_name', type: 'Text', description: 'Opportunity name (will be resolved to ID)', example: 'Q1 Marketing Campaign' },
+            { name: 'assigned_user_name', type: 'Text', description: 'Username (will be resolved to ID)', example: 'admin' },
+            { name: 'due_date', type: 'Date', description: 'Due date (YYYY-MM-DD)', example: '2024-02-15' },
+            { name: 'status', type: 'Text', description: 'Task status (pending, in_progress, completed, on_hold, cancelled)', example: 'pending' },
+            { name: 'description', type: 'Text', description: 'Task description', example: 'Review and approve the marketing proposal' }
           ]
         };
       default:

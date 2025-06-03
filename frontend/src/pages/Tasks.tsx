@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Box,
   Typography,
@@ -30,6 +30,8 @@ import {
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
+import FileUploadIcon from '@mui/icons-material/FileUpload';
+import FileDownloadIcon from '@mui/icons-material/FileDownload';
 
 import taskService, { Task, TaskWithDetails, TaskInput } from '../services/taskService';
 import opportunityService, { Opportunity } from '../services/opportunityService';
@@ -38,6 +40,8 @@ import clientService, { Client } from '../services/clientService';
 import serviceService, { Service } from '../services/serviceService';
 import { useAuth } from '../contexts/AuthContext';
 import { User } from '../services/authService';
+import { exportToCSV, parseCSVFile, validateCSVData, prepareDataForImport, exportForImport } from '../utils/csvUtils';
+import CSVFormatHelper from '../components/CSVFormatHelper';
 
 // Define status options for tasks
 const statusOptions = [
@@ -50,11 +54,13 @@ const statusOptions = [
 
 const Tasks: React.FC = () => {
   const { user } = useAuth();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [tasks, setTasks] = useState<TaskWithDetails[]>([]);
   const [selectedTaskIds, setSelectedTaskIds] = useState<Set<number>>(new Set());
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [deleteConfirmationOpen, setDeleteConfirmationOpen] = useState<boolean>(false);
+  const [showFormatHelper, setShowFormatHelper] = useState(false);
 
   // Add Task Dialog State
   const [dialogOpen, setDialogOpen] = useState<boolean>(false);
@@ -340,6 +346,110 @@ const Tasks: React.FC = () => {
     }
   };
 
+  // CSV Import/Export handlers
+  const handleImportClick = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  };
+
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (!event.target.files || event.target.files.length === 0) {
+      return;
+    }
+    
+    const file = event.target.files[0];
+    
+    try {
+      setLoading(true);
+      const parsedData = await parseCSVFile(file);
+      
+      // Validate the CSV data - make most fields optional with smart defaults
+      const requiredFields = ['name']; // Only name is truly required
+      const validationResult = validateCSVData(parsedData, requiredFields, 'tasks');
+      
+      if (!validationResult.valid) {
+        setError(`CSV validation failed:\n${validationResult.errors.join('\n')}`);
+        return;
+      }
+      
+      // Show warnings if any
+      if (validationResult.warnings.length > 0) {
+        console.warn('CSV Import Warnings:', validationResult.warnings);
+      }
+      
+      // Prepare data for import with lookup data for name-to-ID resolution
+      const lookupData = {
+        opportunities: opportunities,
+        users: users
+      };
+      const processedData = prepareDataForImport(parsedData, 'tasks', lookupData);
+      
+      // Process and create tasks
+      const createdTasks = [];
+      for (const taskData of processedData) {
+        try {
+          const newTask = await taskService.createTask(taskData as TaskInput);
+          createdTasks.push(newTask);
+        } catch (err) {
+          console.error('Error creating task:', err);
+        }
+      }
+      
+      // Refresh tasks list
+      await fetchTasks();
+      setError(null);
+      alert(`Successfully imported ${createdTasks.length} tasks`);
+    } catch (err) {
+      console.error('Error importing tasks:', err);
+      setError('Failed to import tasks. Please check your CSV file format.');
+    } finally {
+      setLoading(false);
+      // Reset the file input
+      if (event.target.value) {
+        event.target.value = '';
+      }
+    }
+  };
+
+  const handleExportClick = () => {
+    // Prepare data for export
+    const dataToExport = tasks.map(task => ({
+      id: task.id,
+      name: task.name,
+      opportunity_id: task.opportunity_id,
+      opportunity_name: task.opportunity_name,
+      assigned_user_id: task.assigned_user_id,
+      assigned_user_name: task.assigned_user_name,
+      due_date: task.due_date,
+      status: task.status,
+      description: task.description,
+      created_at: task.created_at,
+      updated_at: task.updated_at
+    }));
+    
+    exportToCSV(dataToExport, 'tasks_export.csv');
+  };
+
+  // Handler for export import template
+  const handleExportTemplate = () => {
+    try {
+      const templateData = [{
+        name: 'Review Marketing Proposal',
+        opportunity_name: 'Q1 Marketing Campaign',
+        assigned_user_name: 'admin',
+        due_date: '2024-02-15',
+        status: 'pending',
+        description: 'Review and approve the marketing proposal for Q1 campaign - you can use opportunity names and usernames instead of IDs'
+      }];
+      
+      exportForImport(templateData, 'tasks_import_template.csv', 'tasks');
+    } catch (err) {
+      console.error('Error exporting template:', err);
+      setError('Failed to export template.');
+    }
+  };
+
   if (loading && tasks.length === 0) { 
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '50vh' }}>
@@ -363,6 +473,32 @@ const Tasks: React.FC = () => {
               Delete Selected ({selectedTaskIds.size})
             </Button>
           )}
+          <Button 
+            variant="outlined" 
+            startIcon={<FileUploadIcon />}
+            onClick={handleImportClick}
+          >
+            Import CSV
+          </Button>
+          <Button 
+            variant="outlined" 
+            startIcon={<FileDownloadIcon />}
+            onClick={handleExportClick}
+          >
+            Export CSV
+          </Button>
+          <Button 
+            variant="outlined" 
+            onClick={handleExportTemplate}
+          >
+            Import Template
+          </Button>
+          <Button 
+            variant="outlined" 
+            onClick={() => setShowFormatHelper(true)}
+          >
+            CSV Format Help
+          </Button>
           <Button 
             variant="contained" 
             startIcon={<AddIcon />}
@@ -532,6 +668,22 @@ const Tasks: React.FC = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Hidden file input for CSV import */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        style={{ display: 'none' }}
+        accept=".csv"
+        onChange={handleFileChange}
+      />
+
+      {/* CSV Format Helper Dialog */}
+      <CSVFormatHelper
+        open={showFormatHelper}
+        onClose={() => setShowFormatHelper(false)}
+        type="tasks"
+      />
 
       {/* Add/Edit Task Dialog */}
       <Dialog open={dialogOpen} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
