@@ -405,17 +405,33 @@ const Matrix: React.FC = () => {
     return uniqueBusinessUnits;
   }, [matrixData?.services]);
   
-  // Filter clients based on search term and legend filter
+  // Filter clients based on search term only (no legend filter here to avoid circular dependency)
   const filteredClients = useMemo(() => {
     if (!matrixData?.clients) return [];
     
-    let clients = matrixData.clients.filter(client => 
+    return matrixData.clients.filter(client => 
       client.name.toLowerCase().includes(clientSearchTerm.toLowerCase())
     );
+  }, [matrixData?.clients, clientSearchTerm]);
+  
+  // Filter services based on search term and selected business units only (no legend filter here to avoid circular dependency)
+  const filteredServices = useMemo(() => {
+    if (!matrixData?.services) return [];
     
-    // Apply legend filter
-    if (legendFilter) {
-      clients = clients.filter(client => {
+    return matrixData.services.filter(service => {
+      const matchesSearchTerm = service.name.toLowerCase().includes(serviceSearchTerm.toLowerCase());
+      const matchesBusinessUnit = selectedBusinessUnits.length === 0 || 
+                                 selectedBusinessUnits.includes(service.business_unit);
+      
+      return matchesSearchTerm && matchesBusinessUnit;
+    });
+  }, [matrixData?.services, serviceSearchTerm, selectedBusinessUnits]);
+    
+  // Apply legend filtering to the display by filtering which clients and services are shown
+  const displayClients = useMemo(() => {
+    if (!legendFilter) return filteredClients;
+    
+    return filteredClients.filter(client => {
         // Check if this client has any cells that match the legend filter
         return filteredServices.some(service => {
           const cell = matrixData?.matrix[client.id]?.[service.id];
@@ -433,28 +449,14 @@ const Matrix: React.FC = () => {
           return false;
         });
       });
-    }
-    
-    return clients;
-  }, [matrixData?.clients, clientSearchTerm, legendFilter, matrixData?.matrix]);
+  }, [filteredClients, filteredServices, legendFilter, matrixData?.matrix]);
   
-  // Filter services based on search term, selected business units, and legend filter
-  const filteredServices = useMemo(() => {
-    if (!matrixData?.services) return [];
-    
-    let services = matrixData.services.filter(service => {
-      const matchesSearchTerm = service.name.toLowerCase().includes(serviceSearchTerm.toLowerCase());
-      const matchesBusinessUnit = selectedBusinessUnits.length === 0 || 
-                                 selectedBusinessUnits.includes(service.business_unit);
+  const displayServices = useMemo(() => {
+    if (!legendFilter) return filteredServices;
       
-      return matchesSearchTerm && matchesBusinessUnit;
-    });
-    
-    // Apply legend filter
-    if (legendFilter) {
-      services = services.filter(service => {
+    return filteredServices.filter(service => {
         // Check if this service has any cells that match the legend filter
-        return filteredClients.some(client => {
+      return displayClients.some(client => {
           const cell = matrixData?.matrix[client.id]?.[service.id];
           
           if (legendFilter === 'existing') {
@@ -470,10 +472,7 @@ const Matrix: React.FC = () => {
           return false;
         });
       });
-    }
-    
-    return services;
-  }, [matrixData?.services, serviceSearchTerm, selectedBusinessUnits, legendFilter, matrixData?.matrix]);
+  }, [filteredServices, displayClients, legendFilter, matrixData?.matrix]);
   
   if (loading && !matrixData) {
     return (
@@ -697,7 +696,7 @@ const Matrix: React.FC = () => {
             <TableHead>
               <TableRow>
                 <TableCell>Client</TableCell>
-                {filteredServices.map(service => (
+                {displayServices.map(service => (
                   <TableCell key={service.id} align="center">
                     <Tooltip title={service.business_unit}>
                       <Typography variant="body2" noWrap>
@@ -709,14 +708,14 @@ const Matrix: React.FC = () => {
               </TableRow>
             </TableHead>
             <TableBody>
-              {filteredClients.map(client => (
+              {displayClients.map(client => (
                 <TableRow key={client.id}>
                   <TableCell>
                     <Typography variant="body2" noWrap>
                       {client.name}
                     </Typography>
                   </TableCell>
-                  {filteredServices.map(service => (
+                  {displayServices.map(service => (
                     <TableCell 
                       key={service.id} 
                       align="center"
