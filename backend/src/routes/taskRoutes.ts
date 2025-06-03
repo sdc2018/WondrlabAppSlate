@@ -57,6 +57,9 @@ router.get('/overdue', (req, res, next) => {
 // Get tasks for current user
 router.get('/my-tasks', TaskController.getMyTasks);
 
+// Get tasks by assigned user ID (for "My Tasks" filter)
+router.get('/assigned-user/:userId', TaskController.getTasksByAssignedUser);
+
 // Get task by ID
 router.get('/:id', TaskController.getTaskById);
 

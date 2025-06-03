@@ -53,18 +53,23 @@ export class TaskController {
   // Get all tasks with optional filters
   async getAllTasks(req: Request, res: Response): Promise<void> {
     try {
+      if (!req.user) {
+        res.status(401).json({ message: 'Authentication required' });
+        return;
+      }
+      
       const { status, opportunity_id } = req.query;
       let tasks;
 
       if (opportunity_id) {
         tasks = await TaskModel.findByOpportunity(Number(opportunity_id));
       } else if (status) {
-        // Filter tasks by status
-        const allTasks = await TaskModel.findByAssignedUser(req.user?.userId || 0);
-        tasks = allTasks.filter(task => task.status === status);
+        // Get all tasks first, then filter by status
+        const allTasks = await TaskModel.findAllTasks();
+        tasks = allTasks.filter((task: any) => task.status === status);
       } else {
-        // Default to returning tasks for current user
-        tasks = await TaskModel.findByAssignedUser(req.user?.userId || 0);
+        // Return ALL tasks (not just current user's tasks)
+        tasks = await TaskModel.findAllTasks();
       }
 
       res.status(200).json(tasks);
@@ -105,6 +110,30 @@ export class TaskController {
     } catch (error) {
       console.error('Error getting user tasks:', error);
       res.status(500).json({ message: 'Server error while retrieving your tasks' });
+    }
+  }
+
+  // Get tasks by assigned user ID (for frontend service compatibility)
+  async getTasksByAssignedUser(req: Request, res: Response): Promise<void> {
+    try {
+      if (!req.user) {
+        res.status(401).json({ message: 'Authentication required' });
+        return;
+      }
+      
+      const userId = parseInt(req.params.userId);
+      
+      // Only allow users to see their own tasks unless they're admin/bu_head
+      if (req.user.userId !== userId && req.user.role !== UserRole.ADMIN && req.user.role !== UserRole.BU_HEAD) {
+        res.status(403).json({ message: 'Access denied: You can only view your own tasks' });
+        return;
+      }
+      
+      const tasks = await TaskModel.findByAssignedUser(userId);
+      res.status(200).json(tasks);
+    } catch (error) {
+      console.error('Error getting tasks by assigned user:', error);
+      res.status(500).json({ message: 'Server error while retrieving tasks' });
     }
   }
 

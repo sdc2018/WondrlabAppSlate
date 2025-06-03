@@ -123,6 +123,27 @@ export class TaskModel {
     }
   }
 
+  async findAllTasks(): Promise<Task[]> {
+    const query = `
+      SELECT t.*, o.name as opportunity_name, c.name as client_name, s.name as service_name,
+             u.username as assigned_user_name, s.business_unit
+      FROM tasks t
+      JOIN opportunities o ON t.opportunity_id = o.id
+      JOIN clients c ON o.client_id = c.id
+      JOIN services s ON o.service_id = s.id
+      JOIN users u ON t.assigned_user_id = u.id
+      ORDER BY t.due_date ASC
+    `;
+    
+    try {
+      const result = await this.pool.query(query);
+      return result.rows;
+    } catch (error) {
+      console.error('Error finding all tasks:', error);
+      throw error;
+    }
+  }
+
   async findOverdueTasks(): Promise<Task[]> {
     const query = `
       SELECT t.*, o.name as opportunity_name, c.name as client_name, s.name as service_name,
