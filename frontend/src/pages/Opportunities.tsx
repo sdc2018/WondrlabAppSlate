@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   Box, 
   Typography, 
@@ -24,7 +24,9 @@ import {
   CircularProgress,
   Stack,
   Alert,
-  SelectChangeEvent
+  SelectChangeEvent,
+  Checkbox,
+  DialogContentText
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
@@ -107,6 +109,10 @@ const Opportunities: React.FC = () => {
     direction: 'asc'
   });
   
+  // Multi-select state
+  const [selectedOpportunityIds, setSelectedOpportunityIds] = useState<Set<number>>(new Set());
+  const [deleteConfirmationOpen, setDeleteConfirmationOpen] = useState(false);
+  
   // Dialog state
   const [openDialog, setOpenDialog] = useState(false);
   const [currentOpportunity, setCurrentOpportunity] = useState<OpportunityWithDetails | null>(null);
@@ -182,6 +188,79 @@ const Opportunities: React.FC = () => {
       }
     });
   }, [opportunities, searchTerm, sortConfig]);
+
+  // Multi-select handlers (defined after filteredAndSortedOpportunities to avoid dependency issues)
+  const handleSelectAllClick = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    console.log(`Select all checkbox changed. Checked: ${event.target.checked}`);
+    
+    if (event.target.checked) {
+      // Select all opportunities
+      const newSelectedIds = new Set(filteredAndSortedOpportunities.map((opportunity) => opportunity.id));
+      console.log(`Selecting all opportunities: ${Array.from(newSelectedIds).join(', ')}`);
+      setSelectedOpportunityIds(newSelectedIds);
+    } else {
+      // Unselect all opportunities
+      console.log('Clearing all selections');
+      setSelectedOpportunityIds(new Set());
+    }
+  }, [filteredAndSortedOpportunities]);
+
+  const handleCheckboxClick = useCallback((event: React.ChangeEvent<HTMLInputElement>, opportunityId: number) => {
+    // Stop event propagation to prevent any parent handlers from firing
+    event.stopPropagation();
+    
+    console.log(`Checkbox for opportunity ${opportunityId} changed. Checked: ${event.target.checked}`);
+    
+    // Create a new Set from the current one to avoid mutation
+    const newSelectedOpportunityIds = new Set(selectedOpportunityIds);
+    
+    if (event.target.checked) {
+      newSelectedOpportunityIds.add(opportunityId);
+    } else {
+      newSelectedOpportunityIds.delete(opportunityId);
+    }
+    
+    console.log(`New selected opportunities: ${Array.from(newSelectedOpportunityIds).join(', ')}`);
+    
+    // Update state with the new Set
+    setSelectedOpportunityIds(newSelectedOpportunityIds);
+  }, [selectedOpportunityIds]);
+
+  const handleDeleteSelectedOpportunities = async () => {
+    if (selectedOpportunityIds.size === 0) return;
+    
+    setDeleteConfirmationOpen(false);
+    setLoading(true); 
+    try {
+      const deletePromises: Promise<boolean>[] = [];
+      selectedOpportunityIds.forEach(opportunityId => {
+        deletePromises.push(opportunityService.deleteOpportunity(opportunityId));
+      });
+      await Promise.all(deletePromises);
+      
+      // Remove deleted opportunities from local state
+      setOpportunities(prevOpportunities => 
+        prevOpportunities.filter(opp => !selectedOpportunityIds.has(opp.id))
+      );
+      setSelectedOpportunityIds(new Set());
+      setError(null); 
+    } catch (err) {
+      console.error('Failed to delete selected opportunities:', err);
+      setError('Failed to delete one or more opportunities. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const openDeleteConfirmation = () => {
+    if (selectedOpportunityIds.size > 0) {
+      setDeleteConfirmationOpen(true);
+    }
+  };
+
+  const closeDeleteConfirmation = () => {
+    setDeleteConfirmationOpen(false);
+  };
 
   // Fetch opportunities from API
   const fetchOpportunities = async () => {
@@ -675,8 +754,22 @@ const Opportunities: React.FC = () => {
 
   return (
     <Box sx={{ p: 2 }}>
-      <Stack direction="row" justifyContent="flex-end" alignItems="center" sx={{ mb: 1.5 }}>
-        <Box sx={{ display: 'flex', gap: 0.5 }}>
+<Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
+        <Typography variant="h4" component="h1">
+          Opportunities
+        </Typography>
+        <Stack direction="row" spacing={1}>
+          {selectedOpportunityIds.size > 0 && (
+            <Button 
+              variant="contained" 
+              color="error"
+              startIcon={<DeleteIcon />}
+              onClick={openDeleteConfirmation}
+              size="small"
+            >
+              Delete Selected ({selectedOpportunityIds.size})
+            </Button>
+          )}
           <Button 
             variant="outlined" 
             startIcon={<FileUploadIcon />}
@@ -715,7 +808,7 @@ const Opportunities: React.FC = () => {
         >
           Add Opportunity
         </Button>
-        </Box>
+        </Stack>
       </Stack>
 
       {/* Search field */}
@@ -762,6 +855,14 @@ const Opportunities: React.FC = () => {
         <Table>
           <TableHead>
             <TableRow>
+              <TableCell padding="checkbox">
+                <Checkbox
+                  indeterminate={selectedOpportunityIds.size > 0 && selectedOpportunityIds.size < filteredAndSortedOpportunities.length}
+                  checked={filteredAndSortedOpportunities.length > 0 && selectedOpportunityIds.size === filteredAndSortedOpportunities.length}
+                  onChange={handleSelectAllClick}
+                  aria-label="select all opportunities"
+                />
+              </TableCell>
               <TableCell>
                 <TableSortLabel
                   active={sortConfig.field === 'name'}
@@ -840,20 +941,30 @@ const Opportunities: React.FC = () => {
           <TableBody>
             {opportunities.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={9} align="center">
+                <TableCell colSpan={10} align="center">
                   No opportunities found. Create your first opportunity by clicking "Add Opportunity".
                 </TableCell>
               </TableRow>
             ) : filteredAndSortedOpportunities.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={9} align="center">
+                <TableCell colSpan={10} align="center">
                   No opportunities match your search criteria.
                 </TableCell>
               </TableRow>
             ) : (
-              filteredAndSortedOpportunities.map((opportunity) => (
-                <TableRow key={opportunity.id}>
-                  <TableCell>{opportunity.name}</TableCell>
+              filteredAndSortedOpportunities.map((opportunity) => {
+                const isSelected = selectedOpportunityIds.has(opportunity.id);
+                return (
+                <TableRow key={opportunity.id} selected={isSelected} hover>
+                  <TableCell padding="checkbox">
+                    <Checkbox
+                      checked={isSelected}
+                      onChange={(e) => handleCheckboxClick(e, opportunity.id)}
+                      onClick={(e) => e.stopPropagation()}
+                      aria-labelledby={`opportunity-${opportunity.id}`}
+                    />
+                  </TableCell>
+                  <TableCell id={`opportunity-${opportunity.id}`}>{opportunity.name}</TableCell>
                   <TableCell>{opportunity.client_name}</TableCell>
                 <TableCell>
                     {opportunity.service_name}
@@ -893,11 +1004,34 @@ const Opportunities: React.FC = () => {
                   </IconButton>
                 </TableCell>
               </TableRow>
-              ))
+                );
+              })
             )}
           </TableBody>
         </Table>
       </TableContainer>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog
+        open={deleteConfirmationOpen}
+        onClose={closeDeleteConfirmation}
+      >
+        <DialogTitle>Confirm Delete</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Are you sure you want to delete {selectedOpportunityIds.size} selected opportunity{selectedOpportunityIds.size > 1 ? 's' : ''}?
+          </DialogContentText>
+          <DialogContentText color="error" sx={{ mt: 1 }}>
+            This action cannot be undone.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closeDeleteConfirmation}>Cancel</Button>
+          <Button onClick={handleDeleteSelectedOpportunities} color="error" variant="contained">
+            Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Add/Edit Opportunity Dialog */}
       <Dialog 
