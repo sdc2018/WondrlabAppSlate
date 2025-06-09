@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import {
   Box,
   Button,
@@ -14,6 +14,7 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  DialogContentText,
   TextField,
   FormControl,
   InputLabel,
@@ -27,7 +28,8 @@ import {
   Stack,
   Autocomplete,
   TableSortLabel,
-  InputAdornment
+  InputAdornment,
+  Checkbox
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
@@ -98,6 +100,10 @@ const Clients: React.FC = () => {
   const [showFormatHelper, setShowFormatHelper] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [sortConfig, setSortConfig] = useState<SortConfig>({ field: 'name', direction: 'asc' });
+  
+  // Multi-select state
+  const [selectedClientIds, setSelectedClientIds] = useState<Set<number>>(new Set());
+  const [deleteConfirmationOpen, setDeleteConfirmationOpen] = useState(false);
   
   // File input ref for CSV import
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -574,6 +580,79 @@ const Clients: React.FC = () => {
     });
   }, [clients, searchTerm, sortConfig, accountOwners, services]);
   
+  // Multi-select handlers (defined after filteredAndSortedClients to avoid dependency issues)
+  const handleSelectAllClick = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    console.log(`Select all checkbox changed. Checked: ${event.target.checked}`);
+    
+    if (event.target.checked) {
+      // Select all clients
+      const newSelectedIds = new Set(filteredAndSortedClients.map((client) => client.id));
+      console.log(`Selecting all clients: ${Array.from(newSelectedIds).join(', ')}`);
+      setSelectedClientIds(newSelectedIds);
+    } else {
+      // Unselect all clients
+      console.log('Clearing all selections');
+      setSelectedClientIds(new Set());
+    }
+  }, [filteredAndSortedClients]);
+
+  const handleCheckboxClick = useCallback((event: React.ChangeEvent<HTMLInputElement>, clientId: number) => {
+    // Stop event propagation to prevent any parent handlers from firing
+    event.stopPropagation();
+    
+    console.log(`Checkbox for client ${clientId} changed. Checked: ${event.target.checked}`);
+    
+    // Create a new Set from the current one to avoid mutation
+    const newSelectedClientIds = new Set(selectedClientIds);
+    
+    if (event.target.checked) {
+      newSelectedClientIds.add(clientId);
+    } else {
+      newSelectedClientIds.delete(clientId);
+    }
+    
+    console.log(`New selected clients: ${Array.from(newSelectedClientIds).join(', ')}`);
+    
+    // Update state with the new Set
+    setSelectedClientIds(newSelectedClientIds);
+  }, [selectedClientIds]);
+
+  const handleDeleteSelectedClients = async () => {
+    if (selectedClientIds.size === 0) return;
+    
+    setDeleteConfirmationOpen(false);
+    setLoading(true); 
+    try {
+      const deletePromises: Promise<any>[] = [];
+      selectedClientIds.forEach(clientId => {
+        deletePromises.push(clientService.deleteClient(clientId, true)); // Use force=true for bulk delete
+      });
+      await Promise.all(deletePromises);
+      
+      // Remove deleted clients from local state
+      setClients(prevClients => 
+        prevClients.filter(client => !selectedClientIds.has(client.id))
+      );
+      setSelectedClientIds(new Set());
+      setError(null); 
+    } catch (err) {
+      console.error('Failed to delete selected clients:', err);
+      setError('Failed to delete one or more clients. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const openDeleteConfirmation = () => {
+    if (selectedClientIds.size > 0) {
+      setDeleteConfirmationOpen(true);
+    }
+  };
+
+  const closeDeleteConfirmation = () => {
+    setDeleteConfirmationOpen(false);
+  };
+  
   // Handle sort request
   const handleSort = (field: SortField) => {
     setSortConfig(prevConfig => ({
@@ -595,7 +674,20 @@ const Clients: React.FC = () => {
 
   return (
     <Box sx={{ p: 2 }}>
-      <Stack direction="row" justifyContent="flex-end" alignItems="center" sx={{ mb: 1.5 }}>
+      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1.5 }}>
+        <Stack direction="row" spacing={1}>
+          {selectedClientIds.size > 0 && (
+            <Button 
+              variant="contained" 
+              color="error"
+              startIcon={<DeleteIcon />}
+              onClick={openDeleteConfirmation}
+              size="small"
+            >
+              Delete Selected ({selectedClientIds.size})
+            </Button>
+          )}
+        </Stack>
         <Box sx={{ display: 'flex', gap: 0.5 }}>
           <Button 
             variant="outlined" 
@@ -676,6 +768,14 @@ const Clients: React.FC = () => {
           <Table>
             <TableHead>
               <TableRow>
+                <TableCell padding="checkbox">
+                  <Checkbox
+                    indeterminate={selectedClientIds.size > 0 && selectedClientIds.size < filteredAndSortedClients.length}
+                    checked={filteredAndSortedClients.length > 0 && selectedClientIds.size === filteredAndSortedClients.length}
+                    onChange={handleSelectAllClick}
+                    aria-label="select all clients"
+                  />
+                </TableCell>
                 <TableCell>
                   <TableSortLabel
                     active={sortConfig.field === 'name'}
@@ -717,8 +817,18 @@ const Clients: React.FC = () => {
               </TableRow>
             </TableHead>
             <TableBody>
-              {filteredAndSortedClients.map((client) => (
+              {filteredAndSortedClients.map((client) => {
+                const isSelected = selectedClientIds.has(client.id);
+                return (
                 <TableRow key={client.id}>
+                    <TableCell padding="checkbox">
+                      <Checkbox
+                        checked={isSelected}
+                        onChange={(e) => handleCheckboxClick(e, client.id)}
+                        onClick={(e) => e.stopPropagation()}
+                        aria-label={`select client ${client.name}`}
+                      />
+                    </TableCell>
                   <TableCell>
                     <Stack direction="row" alignItems="center" spacing={1}>
                       <BusinessIcon color="primary" fontSize="small" />
@@ -753,11 +863,34 @@ const Clients: React.FC = () => {
                     </IconButton>
                   </TableCell>
                 </TableRow>
-              ))}
+                );
+              })}
             </TableBody>
           </Table>
         </TableContainer>
       )}
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog
+        open={deleteConfirmationOpen}
+        onClose={closeDeleteConfirmation}
+      >
+        <DialogTitle>Confirm Delete</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Are you sure you want to delete {selectedClientIds.size} selected client{selectedClientIds.size > 1 ? 's' : ''}?
+          </DialogContentText>
+          <DialogContentText color="error" sx={{ mt: 1 }}>
+            This action cannot be undone and will also delete all related opportunities.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closeDeleteConfirmation}>Cancel</Button>
+          <Button onClick={handleDeleteSelectedClients} color="error" variant="contained">
+            Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Add/Edit Client Dialog */}
       <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="md" fullWidth>
