@@ -93,9 +93,9 @@ const Dashboard: React.FC = () => {
         // Fetch task stats
         const taskStats = await taskService.getTaskStats();
         
-        // Calculate total tasks
-        const totalTasks = taskStats.pending_count + taskStats.in_progress_count + 
-                          taskStats.completed_count + taskStats.overdue_count;
+        // Calculate total tasks (convert to numbers to avoid string concatenation)
+        const totalTasks = Number(taskStats.pending_count) + Number(taskStats.in_progress_count) + 
+                          Number(taskStats.completed_count) + Number(taskStats.overdue_count);
         
         // Update stats state
         setStats({
@@ -117,10 +117,10 @@ const Dashboard: React.FC = () => {
           },
           tasks: {
             total: totalTasks,
-            pending: taskStats.pending_count,
-            inProgress: taskStats.in_progress_count,
-            completed: taskStats.completed_count,
-            overdue: taskStats.overdue_count
+            pending: Number(taskStats.pending_count),
+            inProgress: Number(taskStats.in_progress_count),
+            completed: Number(taskStats.completed_count),
+            overdue: Number(taskStats.overdue_count)
           }
         });
         
