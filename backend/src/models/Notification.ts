@@ -205,6 +205,18 @@ export class NotificationModel {
     }
   }
 
+  async deleteAllByUser(userId: number): Promise<number> {
+    const query = 'DELETE FROM notifications WHERE user_id = $1 RETURNING id';
+    
+    try {
+      const result = await this.pool.query(query, [userId]);
+      return result.rowCount || 0;
+    } catch (error) {
+      console.error('Error deleting all notifications for user:', error);
+      throw error;
+    }
+  }
+
   async deleteOlderThan(days: number): Promise<number> {
     const query = `
       DELETE FROM notifications 

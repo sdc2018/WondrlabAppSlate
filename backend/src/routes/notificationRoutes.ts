@@ -25,6 +25,9 @@ router.patch('/read-all', NotificationController.markAllAsRead);
 // Delete a notification
 router.delete('/:id', NotificationController.deleteNotification);
 
+// Delete all notifications for current user
+router.delete('/', NotificationController.deleteAllNotifications);
+
 // Clean up old notifications (admin only)
 router.delete('/cleanup', isAdmin, NotificationController.cleanupOldNotifications);
 

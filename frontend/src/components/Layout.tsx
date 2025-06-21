@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   AppBar, 
   Box, 
@@ -35,6 +35,7 @@ import ExpandLess from '@mui/icons-material/ExpandLess';
 import ExpandMore from '@mui/icons-material/ExpandMore';
 import { useNavigate, useLocation, Outlet } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import notificationService from '../services/notificationService';
 
 const drawerWidth = 240;
 
@@ -120,7 +121,7 @@ const navigationItems: NavigationItem[] = [
 const Layout: React.FC = () => {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [userMenuAnchorEl, setUserMenuAnchorEl] = useState<null | HTMLElement>(null);
-  const [notificationCount] = useState(5); // Placeholder for notification count
+  const [notificationCount, setNotificationCount] = useState(0);
   const [openSubMenu, setOpenSubMenu] = useState<string | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
@@ -129,6 +130,23 @@ const Layout: React.FC = () => {
   const { userRole: authUserRole, logout } = useAuth();
   // Provide a default value for userRole when it might be null
   const userRole = authUserRole || 'guest';
+
+  // Fetch notification count on component mount and when user changes
+  useEffect(() => {
+    const fetchNotificationCount = async () => {
+      try {
+        if (authUserRole) { // Only fetch if user is authenticated
+          const countData = await notificationService.getNotificationCount();
+          setNotificationCount(countData.unread); // Use unread count for the badge
+        }
+      } catch (error) {
+        console.error('Error fetching notification count:', error);
+        setNotificationCount(0); // Reset to 0 on error
+      }
+    };
+
+    fetchNotificationCount();
+  }, [authUserRole]); // Re-fetch when user role changes (login/logout)
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
@@ -152,8 +170,17 @@ const Layout: React.FC = () => {
     // No need to manually navigate as the logout method in AuthContext already handles this
   };
 
-  const handleNotificationsClick = () => {
+  const handleNotificationsClick = async () => {
     navigate('/notifications');
+    // Refresh notification count when user clicks on notifications
+    try {
+      if (authUserRole) {
+        const countData = await notificationService.getNotificationCount();
+        setNotificationCount(countData.unread);
+      }
+    } catch (error) {
+      console.error('Error refreshing notification count:', error);
+    }
   };
 
   const handleSubMenuToggle = (text: string) => {

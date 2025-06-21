@@ -140,6 +140,22 @@ export class NotificationController {
     }
   }
 
+  // Delete all notifications for current user
+  async deleteAllNotifications(req: Request, res: Response): Promise<void> {
+    try {
+      if (!req.user) {
+        res.status(401).json({ message: 'Authentication required' });
+        return;
+      }
+      
+      const count = await NotificationModel.deleteAllByUser(req.user.userId);
+      res.status(200).json({ message: `${count} notifications deleted successfully` });
+    } catch (error) {
+      console.error('Error deleting all notifications:', error);
+      res.status(500).json({ message: 'Server error while deleting all notifications' });
+    }
+  }
+
   // Clean up old notifications (admin only)
   async cleanupOldNotifications(req: Request, res: Response): Promise<void> {
     try {
