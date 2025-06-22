@@ -1,0 +1,42 @@
+{{#> base-layout}}
+<h2>🎉 Opportunity Won!</h2>
+
+<div class="success">
+    <h3>Congratulations! {{name}}</h3>
+    <p><strong>Value:</strong> ${{formatCurrency estimated_value}}</p>
+    <p><strong>Client:</strong> {{client_name}}</p>
+</div>
+
+<p>Excellent news!</p>
+
+<p>We're thrilled to announce that the following opportunity has been successfully won:</p>
+
+<ul>
+    <li><strong>Opportunity:</strong> {{name}}</li>
+    <li><strong>Client:</strong> {{client_name}}</li>
+    <li><strong>Service:</strong> {{service_name}}</li>
+    <li><strong>Business Unit:</strong> {{business_unit}}</li>
+    <li><strong>Estimated Value:</strong> ${{formatCurrency estimated_value}}</li>
+    <li><strong>Assigned Sales Rep:</strong> {{assigned_user_name}}</li>
+    <li><strong>Won Date:</strong> {{formatDate updated_at}}</li>
+</ul>
+
+{{#if notes}}
+<p><strong>Notes:</strong> {{notes}}</p>
+{{/if}}
+
+<p><strong>Next Steps:</strong></p>
+<ul>
+    <li>The service has been automatically added to the client's active services</li>
+    <li>Project kickoff meeting should be scheduled</li>
+    <li>Delivery team should be notified</li>
+    <li>Contract finalization if not already complete</li>
+</ul>
+
+<a href="{{app_url}}/opportunities/{{id}}" class="button">View Opportunity</a>
+
+<p>Great work to everyone involved in winning this opportunity!</p>
+
+<p>Best regards,<br>
+WondrlabApp Team</p>
+{{/base-layout}}

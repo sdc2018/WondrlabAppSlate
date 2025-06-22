@@ -3,6 +3,8 @@ import TaskModel, { TaskStatus, TaskInput } from '../models/Task';
 import OpportunityModel from '../models/Opportunity';
 import NotificationModel, { NotificationType } from '../models/Notification';
 import { UserRole } from '../models/User';
+import UserModel from '../models/User';
+import EmailService from '../services/emailService';
 
 export class TaskController {
   // Create a new task
@@ -41,6 +43,31 @@ export class TaskController {
           related_to: 'task',
           related_id: task.id
         });
+
+        // Send email notification for task assignment
+        try {
+          const assignedUser = await UserModel.findById(task.assigned_user_id);
+          if (assignedUser) {
+            const taskData = {
+              ...task,
+              assigned_user_name: assignedUser.username,
+              assigned_user_email: assignedUser.email,
+              opportunity_name: opportunity.name,
+              app_url: process.env.APP_URL || 'http://localhost:3000'
+            };
+
+            await EmailService.sendTaskAssignmentEmail(
+              assignedUser.email,
+              taskData,
+              task.assigned_user_id
+            );
+            
+            console.log(`Task assignment email sent to ${assignedUser.email}`);
+          }
+        } catch (emailError) {
+          console.error('Failed to send task assignment email:', emailError);
+          // Don't fail the task creation if email fails
+        }
       }
 
       res.status(201).json(task);

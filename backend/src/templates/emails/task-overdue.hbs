@@ -1,0 +1,34 @@
+{{#> base-layout}}
+<h2>Task Overdue Reminder</h2>
+
+<div class="urgent">
+    <h3>⚠️ {{name}}</h3>
+    <p><strong>Due Date:</strong> {{formatDate due_date}}</p>
+    <p><strong>Overdue by:</strong> {{overdue_duration}}</p>
+</div>
+
+<p>Hello {{assigned_user_name}},</p>
+
+<p>This is a reminder that the following task is now overdue:</p>
+
+<ul>
+    <li><strong>Task:</strong> {{name}}</li>
+    <li><strong>Opportunity:</strong> {{opportunity_name}}</li>
+    <li><strong>Client:</strong> {{client_name}}</li>
+    <li><strong>Service:</strong> {{service_name}}</li>
+    <li><strong>Original Due Date:</strong> {{formatDate due_date}}</li>
+    <li><strong>Current Status:</strong> {{status}}</li>
+    {{#if description}}
+    <li><strong>Description:</strong> {{description}}</li>
+    {{/if}}
+</ul>
+
+<p><strong>Please complete this task as soon as possible to avoid further delays.</strong></p>
+
+<a href="{{app_url}}/tasks/{{id}}" class="button">Complete Task Now</a>
+
+<p>If you need assistance or have encountered any blockers, please reach out to your supervisor immediately.</p>
+
+<p>Best regards,<br>
+WondrlabApp Team</p>
+{{/base-layout}}

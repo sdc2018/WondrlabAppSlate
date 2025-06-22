@@ -1,0 +1,43 @@
+{{#> base-layout}}
+<h2>Task Escalation Notice</h2>
+
+<div class="urgent">
+    <h3>🚨 Task Requires Attention</h3>
+    <p><strong>Task:</strong> {{name}}</p>
+    <p><strong>Assigned to:</strong> {{assigned_user_name}}</p>
+    <p><strong>Overdue by:</strong> {{overdue_duration}}</p>
+</div>
+
+<p>Hello {{bu_head_name}},</p>
+
+<p>A task in your business unit has been overdue for more than 24 hours and requires your attention:</p>
+
+<ul>
+    <li><strong>Task:</strong> {{name}}</li>
+    <li><strong>Assigned User:</strong> {{assigned_user_name}} ({{assigned_user_email}})</li>
+    <li><strong>Opportunity:</strong> {{opportunity_name}}</li>
+    <li><strong>Client:</strong> {{client_name}}</li>
+    <li><strong>Service:</strong> {{service_name}}</li>
+    <li><strong>Business Unit:</strong> {{business_unit}}</li>
+    <li><strong>Original Due Date:</strong> {{formatDate due_date}}</li>
+    <li><strong>Current Status:</strong> {{status}}</li>
+    {{#if description}}
+    <li><strong>Description:</strong> {{description}}</li>
+    {{/if}}
+</ul>
+
+<p><strong>Recommended Actions:</strong></p>
+<ul>
+    <li>Contact {{assigned_user_name}} to understand any blockers</li>
+    <li>Assess if additional resources are needed</li>
+    <li>Consider reassigning if necessary</li>
+    <li>Update the client if this impacts delivery timelines</li>
+</ul>
+
+<a href="{{app_url}}/tasks/{{id}}" class="button">Review Task</a>
+
+<p>Please take appropriate action to ensure this task is completed promptly.</p>
+
+<p>Best regards,<br>
+WondrlabApp System</p>
+{{/base-layout}}

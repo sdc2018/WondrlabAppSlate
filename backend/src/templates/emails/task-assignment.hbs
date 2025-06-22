@@ -1,0 +1,37 @@
+<h2>New Task Assigned</h2>
+
+<div style="background-color: #fff3cd; border: 1px solid #ffeaa7; border-radius: 4px; padding: 10px; margin: 10px 0;">
+    <h3>{{name}}</h3>
+    <p><strong>Due Date:</strong> {{due_date}}</p>
+    <p><strong>Status:</strong> {{status}}</p>
+</div>
+
+<p>Hello {{assigned_user_name}},</p>
+
+<p>You have been assigned a new task in WondrlabApp:</p>
+
+<ul>
+    <li><strong>Task:</strong> {{name}}</li>
+    {{#if opportunity_name}}
+    <li><strong>Opportunity:</strong> {{opportunity_name}}</li>
+    {{/if}}
+    {{#if client_name}}
+    <li><strong>Client:</strong> {{client_name}}</li>
+    {{/if}}
+    {{#if service_name}}
+    <li><strong>Service:</strong> {{service_name}}</li>
+    {{/if}}
+    <li><strong>Due Date:</strong> {{due_date}}</li>
+    {{#if description}}
+    <li><strong>Description:</strong> {{description}}</li>
+    {{/if}}
+</ul>
+
+<p>Please log into WondrlabApp to view the full task details and begin working on it.</p>
+
+<a href="{{app_url}}/tasks" style="display: inline-block; padding: 12px 24px; background-color: #3498db; color: #ffffff; text-decoration: none; border-radius: 5px; font-weight: bold; margin: 10px 0;">View Task</a>
+
+<p>If you have any questions about this task, please contact your supervisor or the task creator.</p>
+
+<p>Best regards,<br>
+WondrlabApp Team</p>

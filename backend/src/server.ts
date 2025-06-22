@@ -17,6 +17,7 @@ import IndustryModel from './models/Industry';
 
 // Import workflow service
 import workflowService from './services/workflowService';
+import emailService from './services/emailService';
 import businessUnitService from './services/businessUnitService';
 
 // Import routes
@@ -26,9 +27,7 @@ import clientRoutes from './routes/clientRoutes';
 import opportunityRoutes from './routes/opportunityRoutes';
 import taskRoutes from './routes/taskRoutes';
 import notificationRoutes from './routes/notificationRoutes';
-import businessUnitRoutes from './routes/businessUnitRoutes';
-import industryRoutes from './routes/industryRoutes';
-import userRoutes from './routes/userRoutes';
+import emailRoutes from './routes/emailRoutes';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -80,9 +79,12 @@ app.use('/api/clients', clientRoutes);
 app.use('/api/opportunities', opportunityRoutes);
 app.use('/api/tasks', taskRoutes);
 app.use('/api/notifications', notificationRoutes);
-app.use('/api/admin/business-units', businessUnitRoutes);
-app.use('/api/admin/industries', industryRoutes);
-app.use('/api/users', userRoutes);
+app.use('/api/email', emailRoutes);
+
+// Admin routes (commented out until implemented)
+// app.use('/api/admin/business-units', businessUnitRoutes);
+// app.use('/api/admin/industries', industryRoutes);
+// app.use('/api/users', userRoutes);
 
 // Basic route for testing
 app.get('/', (_req: Request, res: Response) => {

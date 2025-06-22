@@ -3,6 +3,8 @@ import NotificationModel, { NotificationType } from '../models/Notification';
 import OpportunityModel, { OpportunityStatus } from '../models/Opportunity';
 import ClientModel from '../models/Client';
 import ServiceModel from '../models/Service';
+import UserModel from '../models/User';
+import EmailService from './emailService';
 
 // Extended Task interface for the joined properties returned by findOverdueTasks
 interface ExtendedTask {
@@ -60,7 +62,7 @@ class WorkflowService {
         const dueDate = new Date(task.due_date);
         const hoursOverdue = Math.floor((now.getTime() - dueDate.getTime()) / (1000 * 60 * 60));
         
-        // Send notification to task owner
+        // Send in-app notification to task owner
           await NotificationModel.create({
             user_id: task.assigned_user_id,
             type: NotificationType.TASK_OVERDUE,
@@ -69,15 +71,28 @@ class WorkflowService {
             related_to: 'task',
           related_id: task.id
           });
+        
+        // Send email notification to task owner
+        const taskData = {
+          ...task,
+          overdue_duration: `${hoursOverdue} hours`,
+          app_url: process.env.APP_URL || 'http://localhost:3000'
+        };
+        
+        await EmailService.sendTaskOverdueEmail(
+          task.assigned_user_email,
+          taskData,
+          task.assigned_user_id
+        );
           
           console.log(`Sent overdue notification for task ${task.id} to user ${task.assigned_user_id}`);
         
         // If task is overdue by more than 24 hours, escalate to BU Head if available
-        // The bu_head_email will be null if no BU Head was found
         if (hoursOverdue >= 24 && task.bu_head_email) {
           // Find the BU Head ID using the business unit
           const buHeadId = await NotificationModel.findBUHeadByBusinessUnit(task.business_unit);
           if (buHeadId) {
+            // Send in-app notification
               await NotificationModel.create({
               user_id: buHeadId,
                 type: NotificationType.TASK_OVERDUE_ESCALATION,
@@ -87,6 +102,13 @@ class WorkflowService {
               related_id: task.id
               });
               
+            // Send email escalation
+            await EmailService.sendTaskEscalationEmail(
+              task.bu_head_email,
+              taskData,
+              buHeadId
+            );
+            
             console.log(`Escalated overdue task ${task.id} to BU Head ${buHeadId}`);
           }
         }
@@ -133,6 +155,10 @@ class WorkflowService {
         const service = await ServiceModel.findById(opportunity.service_id);
         if (!service) continue;
         
+        // Get assigned user details
+        const assignedUser = await UserModel.findById(opportunity.assigned_user_id);
+        if (!assignedUser) continue;
+        
         // Notify account owner
         await NotificationModel.create({
           user_id: client.account_owner_id,
@@ -155,6 +181,47 @@ class WorkflowService {
             related_id: opportunity.id
           });
         }
+        
+        // Send email notifications
+        const opportunityData = {
+          ...opportunity,
+          client_name: client.name,
+          service_name: service.name,
+          business_unit: service.business_unit,
+          assigned_user_name: assignedUser.username,
+          app_url: process.env.APP_URL || 'http://localhost:3000'
+        };
+        
+        // Collect recipients for email
+        const recipients: string[] = [];
+        const userIds: number[] = [];
+        
+        // Add account owner
+        const accountOwner = await UserModel.findById(client.account_owner_id);
+        if (accountOwner) {
+          recipients.push(accountOwner.email);
+          userIds.push(accountOwner.id);
+        }
+        
+        // Add BU Head
+        if (buHeadId) {
+          const buHead = await UserModel.findById(buHeadId);
+          if (buHead) {
+            recipients.push(buHead.email);
+            userIds.push(buHead.id);
+          }
+        }
+        
+        // Add assigned user
+        recipients.push(assignedUser.email);
+        userIds.push(assignedUser.id);
+        
+        // Send celebration email
+        await EmailService.sendOpportunityWonEmail(
+          recipients,
+          opportunityData,
+          userIds
+        );
         
         console.log(`Updated client ${opportunity.client_id} with service ${opportunity.service_id} from won opportunity ${opportunity.id}`);
       }

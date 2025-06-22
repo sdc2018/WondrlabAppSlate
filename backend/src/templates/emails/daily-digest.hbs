@@ -1,0 +1,65 @@
+{{#> base-layout}}
+<h2>Daily Digest - {{formatDate date}}</h2>
+
+<p>Hello {{recipient_name}},</p>
+
+<p>Here's your daily summary from WondrlabApp:</p>
+
+{{#if overdue_tasks}}
+<div class="urgent">
+    <h3>⚠️ Overdue Tasks ({{overdue_tasks.length}})</h3>
+    {{#each overdue_tasks}}
+    <div style="margin-bottom: 10px; padding: 10px; border-left: 3px solid #dc3545;">
+        <strong>{{name}}</strong><br>
+        Assigned to: {{assigned_user_name}}<br>
+        Due: {{formatDate due_date}}<br>
+        Client: {{client_name}}
+    </div>
+    {{/each}}
+</div>
+{{/if}}
+
+{{#if new_opportunities}}
+<div class="highlight">
+    <h3>🆕 New Opportunities ({{new_opportunities.length}})</h3>
+    {{#each new_opportunities}}
+    <div style="margin-bottom: 10px; padding: 10px; border-left: 3px solid #28a745;">
+        <strong>{{name}}</strong><br>
+        Client: {{client_name}}<br>
+        Value: ${{formatCurrency estimated_value}}<br>
+        Assigned to: {{assigned_user_name}}
+    </div>
+    {{/each}}
+</div>
+{{/if}}
+
+{{#if won_opportunities}}
+<div class="success">
+    <h3>🎉 Opportunities Won ({{won_opportunities.length}})</h3>
+    {{#each won_opportunities}}
+    <div style="margin-bottom: 10px; padding: 10px; border-left: 3px solid #17a2b8;">
+        <strong>{{name}}</strong><br>
+        Client: {{client_name}}<br>
+        Value: ${{formatCurrency estimated_value}}<br>
+        Won by: {{assigned_user_name}}
+    </div>
+    {{/each}}
+</div>
+{{/if}}
+
+<h3>📊 Summary Statistics</h3>
+<ul>
+    <li><strong>Total Active Tasks:</strong> {{stats.total_tasks}}</li>
+    <li><strong>Tasks Due Today:</strong> {{stats.due_today}}</li>
+    <li><strong>Overdue Tasks:</strong> {{stats.overdue_count}}</li>
+    <li><strong>Active Opportunities:</strong> {{stats.active_opportunities}}</li>
+    <li><strong>Total Pipeline Value:</strong> ${{formatCurrency stats.pipeline_value}}</li>
+</ul>
+
+<a href="{{app_url}}/dashboard" class="button">View Dashboard</a>
+
+<p>Have a productive day!</p>
+
+<p>Best regards,<br>
+WondrlabApp Team</p>
+{{/base-layout}}
